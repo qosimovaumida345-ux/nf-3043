@@ -68,8 +68,20 @@ export async function POST(request: Request) {
     response.cookies.set(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
 
     return response;
-  } catch (error) {
-    console.error("Login xatoligi:", error);
+  } catch (error: unknown) {
+    const err = error as { code?: string; message?: string };
+    console.error("Login xatoligi:", err);
+
+    if (err?.code === "ECONNREFUSED" || err?.message?.includes("ECONNREFUSED")) {
+      return NextResponse.json(
+        {
+          error:
+            "PostgreSQL bazasiga ulanib bo'lmadi (ECONNREFUSED). Iltimos, .env faylidagi DATABASE_URL ga Render'dagi PostgreSQL tashqi ssilkasi (External URL) ni kiriting yoki lokal PostgreSQL ni ishga tushiring.",
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Tizimga kirishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring." },
       { status: 500 }
