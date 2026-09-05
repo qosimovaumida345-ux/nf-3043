@@ -56,9 +56,9 @@ export default function AdminDashboardPage() {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Filters: default to PENDING so reviewed submissions don't clutter the teacher's view
   const [selectedStudent, setSelectedStudent] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+  const [selectedStatus, setSelectedStatus] = useState<string>("PENDING");
 
   // Review state per submission: [submissionId]: { feedbackText, verdict, isSaving }
   const [reviewDrafts, setReviewDrafts] = useState<{
@@ -214,6 +214,15 @@ export default function AdminDashboardPage() {
             : s
         )
       );
+
+      // O'qituvchiga tasdiq bildirishnomasi (Topshiriq tekshirildi va navbatdan chiqarildi)
+      const reviewAlert: LiveNotification = {
+        id: Math.random().toString(36).substring(2, 9),
+        title: "Topshiriq baholandi!",
+        message: `Topshiriq "${draft.verdict === "CORRECT" ? "To'g'ri" : draft.verdict === "INCORRECT" ? "Xato" : "Qayta topshirish"}" deb belgilandi va kutilayotganlar ro'yxatidan olib tashlandi.`,
+        time: new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+      };
+      setLiveAlerts((prev) => [reviewAlert, ...prev.slice(0, 4)]);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       alert(errorMessage);
@@ -281,10 +290,13 @@ export default function AdminDashboardPage() {
       <header className="sticky top-0 z-40 bg-white/75 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white font-bold text-base shadow-sm">
-                M
-              </div>
+            <Link href="/" className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="Mars IT Logo"
+                className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/60 bg-slate-950/5"
+              />
               <div>
                 <h1 className="font-fustat font-bold text-lg leading-tight text-slate-900">
                   Mars IT <span className="text-blue-600 text-xs font-normal">O&apos;qituvchi Paneli</span>
@@ -410,11 +422,11 @@ export default function AdminDashboardPage() {
               onChange={(e) => setSelectedStatus(e.target.value)}
               className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             >
-              <option value="ALL">Barcha statuslar</option>
-              <option value="PENDING">🟡 Kutilmoqda</option>
-              <option value="CORRECT">🟢 To&apos;g&apos;ri</option>
-              <option value="INCORRECT">🔴 Xato</option>
-              <option value="RETRY">🟠 Qayta topshirish</option>
+              <option value="PENDING">🟡 Faqat tekshirilmaganlar (Kutilmoqda)</option>
+              <option value="ALL">📁 Barcha topshiriqlar tarixi (Arxiv)</option>
+              <option value="CORRECT">🟢 To&apos;g&apos;ri deb baholanganlar</option>
+              <option value="INCORRECT">🔴 Xato deb baholanganlar</option>
+              <option value="RETRY">🟠 Qayta topshirish so&apos;ralganlar</option>
             </select>
           </div>
 
@@ -486,13 +498,13 @@ export default function AdminDashboardPage() {
                     <div className="lg:col-span-5">
                       <div
                         onClick={() => setZoomedImage(sub.imageUrl)}
-                        className="relative w-full h-64 sm:h-72 rounded-2xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group"
+                        className="relative w-full h-64 sm:h-72 rounded-2xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center"
                       >
-                        <Image
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
                           src={sub.imageUrl}
                           alt="Code photo"
-                          fill
-                          className="object-contain bg-slate-950/5 group-hover:scale-102 transition-transform duration-200"
+                          className="w-full h-full object-contain bg-slate-950/5 group-hover:scale-102 transition-transform duration-200"
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5">
                           <Maximize2 className="w-5 h-5" />
@@ -621,14 +633,14 @@ export default function AdminDashboardPage() {
             <X className="w-6 h-6" />
           </button>
           <div
-            className="relative max-w-6xl max-h-[85vh] w-full h-[85vh]"
+            className="relative max-w-6xl max-h-[85vh] flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={zoomedImage}
               alt="Zoomed code preview"
-              fill
-              className="object-contain"
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
             />
           </div>
         </div>

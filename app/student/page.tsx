@@ -204,9 +204,12 @@ export default function StudentDashboardPage() {
       <header className="sticky top-0 z-40 bg-white/70 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white font-bold text-base shadow-sm">
-              M
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Mars IT Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/60 bg-slate-950/5"
+            />
             <div>
               <h1 className="font-fustat font-bold text-lg leading-tight text-slate-900">
                 Mars IT <span className="text-blue-600 text-xs font-normal">Talaba Kabineti</span>
@@ -313,19 +316,19 @@ export default function StudentDashboardPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.heic,.heif,.webp,.png,.jpg,.jpeg,.gif,.bmp,.svg,.avif"
                       onChange={handleFileChange}
                       className="hidden"
                     />
 
                     {previewUrl ? (
                       <div className="space-y-3">
-                        <div className="relative w-full h-48 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200">
-                          <Image
+                        <div className="relative w-full h-48 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
                             src={previewUrl}
                             alt="Preview"
-                            fill
-                            className="object-cover"
+                            className="w-full h-full object-cover"
                           />
                         </div>
                         <p className="text-xs text-blue-600 font-medium hover:underline">
@@ -341,7 +344,7 @@ export default function StudentDashboardPage() {
                           Rasm faylini tanlash uchun bosing
                         </div>
                         <p className="text-[11px] text-slate-400">
-                          PNG, JPG, WEBP (maksimal 10MB)
+                          Barcha rasm formatlari: PNG, JPG, WEBP, HEIC, GIF (25MB gacha)
                         </p>
                       </div>
                     )}
@@ -425,13 +428,13 @@ export default function StudentDashboardPage() {
                       {/* Image Thumbnail with zoom trigger */}
                       <div
                         onClick={() => setZoomedImage(sub.imageUrl)}
-                        className="relative w-full sm:w-48 h-36 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group shrink-0"
+                        className="relative w-full sm:w-48 h-36 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group shrink-0 flex items-center justify-center"
                       >
-                        <Image
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
                           src={sub.imageUrl}
                           alt="Code submission"
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1">
                           <Maximize2 className="w-4 h-4" />
@@ -495,14 +498,14 @@ export default function StudentDashboardPage() {
             <X className="w-6 h-6" />
           </button>
           <div
-            className="relative max-w-5xl max-h-[85vh] w-full h-[80vh]"
+            className="relative max-w-5xl max-h-[85vh] flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={zoomedImage}
               alt="Zoomed code preview"
-              fill
-              className="object-contain"
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
             />
           </div>
         </div>

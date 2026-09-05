@@ -16,19 +16,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Fayl tanlanmadi." }, { status: 400 });
     }
 
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Faqat rasm fayllari (JPEG, PNG, WEBP) qabul qilinadi." }, { status: 400 });
+    // Barcha rasm formatlarini tekshirish (MIME type yoki kengaytma orqali)
+    const isImage =
+      file.type.startsWith("image/") ||
+      /\.(jpe?g|png|webp|heic|heif|gif|bmp|svg|avif|tiff|jfif)$/i.test(file.name);
+
+    if (!isImage) {
+      return NextResponse.json(
+        { error: "Faqat rasm formatidagi fayllar (PNG, JPG, JPEG, WEBP, HEIC, HEIF, BMP, GIF, AVIF) qabul qilinadi." },
+        { status: 400 }
+      );
     }
 
-    // Maksimal hajm: 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "Rasm hajmi 10MB dan oshmasligi kerak." }, { status: 400 });
+    // Maksimal hajm: 25MB (telefonlardan tushgan katta hajmli suratlar uchun)
+    if (file.size > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: "Rasm hajmi 25MB dan oshmasligi kerak." }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const result = await uploadImage(buffer, file.name, file.type);
+    const result = await uploadImage(buffer, file.name, file.type || "image/jpeg");
 
     return NextResponse.json({
       success: true,

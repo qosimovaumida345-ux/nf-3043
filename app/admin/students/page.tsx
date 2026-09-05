@@ -110,6 +110,12 @@ export default function AdminStudentsPage() {
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Mars IT Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/60 bg-slate-950/5"
+            />
             <div>
               <h1 className="font-fustat font-bold text-lg leading-tight text-slate-900">
                 Talabalar Hisoblari Boshqaruvi

@@ -55,10 +55,13 @@ function LoginForm() {
     <div className="w-full max-w-md">
       {/* Brand Header */}
       <div className="text-center mb-8">
-        <Link href="/" className="inline-flex items-center gap-2 mb-3">
-          <span className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-blue-500/20">
-            M
-          </span>
+        <Link href="/" className="inline-flex items-center gap-3 mb-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="Mars IT Logo"
+            className="w-12 h-12 rounded-2xl object-contain shadow-md border border-slate-200/60 bg-slate-950/5"
+          />
           <span className="font-fustat font-bold text-2xl tracking-tight text-slate-900">
             Mars IT <span className="text-blue-600 text-sm font-normal">NF-3043</span>
           </span>
@@ -165,14 +168,6 @@ function LoginForm() {
           <p className="text-xs text-slate-500 leading-relaxed">
             Ommaviy ro&apos;yxatdan o&apos;tish yopiq. Talabalar hisobini faqat o&apos;qituvchi o&apos;z panelidan ochib beradi.
           </p>
-        </div>
-
-        {/* Default Admin Quick Helper */}
-        <div className="mt-4 p-3 rounded-xl bg-blue-50/70 border border-blue-100 flex items-start gap-2.5 text-xs text-blue-800">
-          <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-semibold">Boshlang&apos;ich admin:</span> login: <code className="bg-blue-100/80 px-1 py-0.5 rounded font-mono font-bold">admin</code>, parol: <code className="bg-blue-100/80 px-1 py-0.5 rounded font-mono font-bold">admin123</code>
-          </div>
         </div>
       </div>
 

@@ -21,11 +21,14 @@ export default function HomePage() {
             boxShadow: "inset 0px 4px 4px 0px rgba(255, 255, 255, 0.25), 0 10px 25px -5px rgba(0,0,0,0.04)",
           }}
         >
-          {/* Logo "Taskly" / Mars IT */}
-          <Link href="/" className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              M
-            </span>
+          {/* Logo Mars IT */}
+          <Link href="/" className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Mars IT Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/60 bg-slate-950/5"
+            />
             <span className="font-fustat font-bold text-xl tracking-tight text-slate-900">
               Mars IT <span className="text-blue-600 text-sm font-normal">NF-3043</span>
             </span>
