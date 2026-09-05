@@ -31,7 +31,7 @@ export function getDb() {
   return dbInstance!;
 }
 
-// Baza jadvallarini avtomatik tekshirish va yaratish (Render'da alohida migratsiya yurgizmaslik uchun)
+// Baza jadvallarini avtomatik tekshirish va yaratish
 export async function ensureDatabaseReady() {
   if (!connectionString) return;
 
@@ -41,7 +41,17 @@ export async function ensureDatabaseReady() {
       max: 2,
     });
 
-    // 1. users jadvali
+    // 1. groups jadvali
+    await sql`
+      CREATE TABLE IF NOT EXISTS groups (
+        id TEXT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        description TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // 2. users jadvali
     await sql`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -55,7 +65,26 @@ export async function ensureDatabaseReady() {
       );
     `;
 
-    // 2. submissions jadvali
+    // users jadvaliga group_id qo'shish (agar mavjud bo'lmasa)
+    await sql`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS group_id TEXT REFERENCES groups(id) ON DELETE SET NULL;
+    `;
+
+    // 3. homeworks jadvali (O'qituvchi ochadigan uy ishlari)
+    await sql`
+      CREATE TABLE IF NOT EXISTS homeworks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        sample_image_url TEXT,
+        group_id TEXT REFERENCES groups(id) ON DELETE CASCADE,
+        admin_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // 4. submissions jadvali
     await sql`
       CREATE TABLE IF NOT EXISTS submissions (
         id TEXT PRIMARY KEY,
@@ -69,7 +98,12 @@ export async function ensureDatabaseReady() {
       );
     `;
 
-    // 3. review_comments jadvali
+    // submissions jadvaliga homework_id qo'shish (agar mavjud bo'lmasa)
+    await sql`
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS homework_id TEXT REFERENCES homeworks(id) ON DELETE CASCADE;
+    `;
+
+    // 5. review_comments jadvali
     await sql`
       CREATE TABLE IF NOT EXISTS review_comments (
         id TEXT PRIMARY KEY,
@@ -82,7 +116,7 @@ export async function ensureDatabaseReady() {
       );
     `;
 
-    // 4. notifications jadvali
+    // 6. notifications jadvali
     await sql`
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,

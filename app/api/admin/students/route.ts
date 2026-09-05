@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, hashPassword } from "@/lib/auth";
 import { getDb, ensureDatabaseReady } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { users, groups } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 
 export async function GET() {
@@ -19,10 +19,13 @@ export async function GET() {
         id: users.id,
         username: users.username,
         fullName: users.fullName,
+        groupId: users.groupId,
+        groupName: groups.name,
         isActive: users.isActive,
         createdAt: users.createdAt,
       })
       .from(users)
+      .leftJoin(groups, eq(users.groupId, groups.id))
       .where(eq(users.role, "STUDENT"))
       .orderBy(desc(users.createdAt));
 
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { username, fullName, password } = body;
+    const { username, fullName, password, groupId } = body;
 
     if (!username || !fullName || !password) {
       return NextResponse.json(
@@ -84,6 +87,7 @@ export async function POST(request: Request) {
       passwordHash,
       role: "STUDENT",
       fullName: fullName.trim(),
+      groupId: groupId || null,
       isActive: true,
     });
 
@@ -93,6 +97,7 @@ export async function POST(request: Request) {
         id: newStudentId,
         username: cleanUsername,
         fullName: fullName.trim(),
+        groupId: groupId || null,
       },
     });
   } catch (error) {

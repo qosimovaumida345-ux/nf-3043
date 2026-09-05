@@ -18,6 +18,8 @@ import {
   Send,
   Radio,
   UserCheck,
+  BookOpen,
+  Settings,
 } from "lucide-react";
 
 interface Submission {
@@ -316,11 +318,19 @@ export default function AdminDashboardPage() {
 
           <div className="flex items-center gap-3">
             <Link
+              href="/admin/homeworks"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-xs"
+            >
+              <BookOpen className="w-4 h-4 text-blue-600" />
+              <span>Uy Ishlari</span>
+            </Link>
+
+            <Link
               href="/admin/students"
               className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-xs"
             >
-              <Users className="w-4 h-4 text-blue-600" />
-              <span>Talabalar Hisoblari</span>
+              <Settings className="w-4 h-4 text-blue-600" />
+              <span>Sozlamalar & Guruhlar</span>
             </Link>
 
             <button

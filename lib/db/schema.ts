@@ -1,19 +1,39 @@
 import { pgTable, text, timestamp, boolean, varchar } from "drizzle-orm/pg-core";
 
+export const groups = pgTable("groups", {
+  id: text("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: varchar("username", { length: 100 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: varchar("role", { length: 20 }).notNull().default("STUDENT"), // 'ADMIN' | 'STUDENT'
   fullName: varchar("full_name", { length: 150 }).notNull(),
+  groupId: text("group_id").references(() => groups.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const homeworks = pgTable("homeworks", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  sampleImageUrl: text("sample_image_url"),
+  groupId: text("group_id").references(() => groups.id, { onDelete: "cascade" }), // null bo'lsa barcha guruhlar uchun
+  adminId: text("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const submissions = pgTable("submissions", {
   id: text("id").primaryKey(),
   studentId: text("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  homeworkId: text("homework_id").references(() => homeworks.id, { onDelete: "cascade" }),
   imageUrl: text("image_url").notNull(),
   storageKey: text("storage_key"),
   taskTitle: text("task_title").default("Kundalik kod topshirig'i"),
@@ -41,8 +61,12 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export type Group = typeof groups.$inferSelect;
+export type NewGroup = typeof groups.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Homework = typeof homeworks.$inferSelect;
+export type NewHomework = typeof homeworks.$inferInsert;
 export type Submission = typeof submissions.$inferSelect;
 export type NewSubmission = typeof submissions.$inferInsert;
 export type ReviewComment = typeof reviewComments.$inferSelect;
