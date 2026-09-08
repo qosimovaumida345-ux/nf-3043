@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
   Clock,
@@ -283,13 +284,17 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50 text-slate-900 pb-20">
-      {/* Glow backgrounds */}
-      <div className="absolute top-[-80px] right-[-80px] w-[500px] h-[500px] rounded-full bg-[#60B1FF]/20 blur-[130px] -z-10" />
-      <div className="absolute top-[300px] left-[-100px] w-[450px] h-[450px] rounded-full bg-[#319AFF]/15 blur-[120px] -z-10" />
+    <div className="relative min-h-screen bg-slate-50 text-slate-900 pb-20 overflow-x-hidden">
+      {/* Dynamic Animated Ambient Background Orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
+        <div className="absolute top-[-120px] right-[-100px] w-[650px] h-[650px] rounded-full bg-gradient-to-br from-[#319AFF]/25 via-[#60B1FF]/20 to-transparent blur-[140px] animate-pulse" />
+        <div className="absolute top-[25%] left-[-120px] w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-[#5E0ED7]/20 via-purple-400/15 to-transparent blur-[150px]" />
+        <div className="absolute bottom-[-100px] right-[25%] w-[650px] h-[650px] rounded-full bg-gradient-to-bl from-emerald-400/15 via-sky-400/20 to-transparent blur-[150px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:32px_32px] opacity-[0.07]" />
+      </div>
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/75 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-3">
@@ -378,30 +383,73 @@ export default function AdminDashboardPage() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
-        {/* Stats and Filter Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="p-5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jami Topshiriqlar</div>
-            <div className="text-2xl font-fustat font-bold text-slate-900 mt-1">{submissions.length}</div>
-          </div>
-          <div className="p-5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Kutilmoqda (Pending)</div>
-            <div className="text-2xl font-fustat font-bold text-blue-600 mt-1">
-              {submissions.filter((s) => s.status === "PENDING").length}
+        {/* Animated KPI Stats Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Jami Topshiriqlar</div>
+              <div className="text-2xl font-fustat font-bold text-slate-900 mt-1">{submissions.length}</div>
             </div>
-          </div>
-          <div className="p-5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">To&apos;g&apos;ri Qabul Qilingan</div>
-            <div className="text-2xl font-fustat font-bold text-emerald-600 mt-1">
-              {submissions.filter((s) => s.status === "CORRECT").length}
+            <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
+              <Users className="w-5 h-5" />
             </div>
-          </div>
-          <div className="p-5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-xs">
-            <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Qayta Topsherish</div>
-            <div className="text-2xl font-fustat font-bold text-amber-600 mt-1">
-              {submissions.filter((s) => s.status === "RETRY").length}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Kutilmoqda (Pending)</div>
+              <div className="text-2xl font-fustat font-bold text-blue-600 mt-1">
+                {submissions.filter((s) => s.status === "PENDING").length}
+              </div>
             </div>
-          </div>
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+              <Clock className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <div className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">To&apos;g&apos;ri Qabul Qilingan</div>
+              <div className="text-2xl font-fustat font-bold text-emerald-600 mt-1">
+                {submissions.filter((s) => s.status === "CORRECT").length}
+              </div>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <div className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Qayta Topshirish</div>
+              <div className="text-2xl font-fustat font-bold text-amber-600 mt-1">
+                {submissions.filter((s) => s.status === "RETRY").length}
+              </div>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </motion.div>
         </div>
 
         {/* Filters Section */}
@@ -460,16 +508,19 @@ export default function AdminDashboardPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredSubmissions.map((sub) => {
+            {filteredSubmissions.map((sub, idx) => {
               const draft = reviewDrafts[sub.id] || {
                 feedbackText: sub.comment?.feedbackText || "",
                 verdict: (sub.comment?.verdict as "CORRECT" | "INCORRECT" | "RETRY") || "CORRECT",
               };
 
               return (
-                <div
+                <motion.div
                   key={sub.id}
-                  className="rounded-3xl p-6 bg-white/85 backdrop-blur-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all space-y-5"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * idx, duration: 0.4 }}
+                  className="rounded-3xl p-6 bg-white/85 backdrop-blur-xl border border-white/90 shadow-sm hover:shadow-xl hover:border-blue-300/60 transition-all space-y-5"
                 >
                   {/* Top Bar: Student info, date, status */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
@@ -623,7 +674,7 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

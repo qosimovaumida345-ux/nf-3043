@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   UploadCloud,
   FileCode2,
@@ -218,13 +219,17 @@ export default function StudentDashboardPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50 text-slate-900 pb-20">
-      {/* Background glow */}
-      <div className="absolute top-[-80px] left-[-80px] w-[500px] h-[500px] rounded-full bg-[#60B1FF]/20 blur-[130px] -z-10" />
-      <div className="absolute top-[200px] right-[-100px] w-[450px] h-[450px] rounded-full bg-[#319AFF]/15 blur-[120px] -z-10" />
+    <div className="relative min-h-screen bg-slate-50 text-slate-900 pb-20 overflow-x-hidden">
+      {/* Dynamic Animated Ambient Background Orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
+        <div className="absolute top-[-120px] left-[-100px] w-[650px] h-[650px] rounded-full bg-gradient-to-br from-[#319AFF]/25 via-[#60B1FF]/20 to-transparent blur-[140px] animate-pulse" />
+        <div className="absolute top-[20%] right-[-120px] w-[600px] h-[600px] rounded-full bg-gradient-to-bl from-[#5E0ED7]/20 via-purple-400/15 to-transparent blur-[150px]" />
+        <div className="absolute bottom-[-100px] left-[25%] w-[650px] h-[650px] rounded-full bg-gradient-to-tr from-emerald-400/15 via-sky-400/20 to-transparent blur-[150px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:32px_32px] opacity-[0.07]" />
+      </div>
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/75 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -258,26 +263,98 @@ export default function StudentDashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
-        {/* Welcome banner */}
-        <div
-          className="rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-lg border border-white/60"
+        {/* Welcome banner with Framer Motion */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-xl border border-white/80"
           style={{
-            background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(239,246,255,0.85) 100%)",
-            backdropFilter: "blur(20px)",
+            background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(239,246,255,0.85) 50%, rgba(243,232,255,0.75) 100%)",
+            backdropFilter: "blur(24px)",
           }}
         >
           <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/60 text-blue-700 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/70 text-blue-700 text-xs font-semibold shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
               <span>Ustoz Tomonidan Berilgan Vazifalar</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-fustat font-bold text-slate-900 tracking-tight">
-              Assalomu alaykum, {user?.fullName || "Talaba"}!
+              Assalomu alaykum, {user?.fullName || "Talaba"}! 👋
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
               Quyida ustozingiz tomonidan e&apos;lon qilingan uy ishlari ro&apos;yxati keltirilgan. Har bir uy ishiga o&apos;z kodingiz suratini yuklab topshiring. Ustoz tekshirib natija e&apos;lon qilmaguncha bir xil vazifaga qayta rasm yuborib bo&apos;lmaydi.
             </p>
           </div>
+        </motion.div>
+
+        {/* Animated KPI Stats Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Jami Vazifalar</p>
+              <h4 className="text-2xl font-bold text-slate-900 mt-1">{homeworks.length}</h4>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+              <BookOpen className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Qabul Qilingan</p>
+              <h4 className="text-2xl font-bold text-emerald-600 mt-1">
+                {homeworks.filter((h) => h.isCorrect).length}
+              </h4>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tekshirilmoqda</p>
+              <h4 className="text-2xl font-bold text-amber-600 mt-1">
+                {homeworks.filter((h) => h.isPending).length}
+              </h4>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+              <Clock className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-md flex items-center justify-between hover:scale-[1.02] transition-transform"
+          >
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Topshirilmagan</p>
+              <h4 className="text-2xl font-bold text-indigo-600 mt-1">
+                {homeworks.filter((h) => !h.mySubmission).length}
+              </h4>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
+              <FileCode2 className="w-5 h-5" />
+            </div>
+          </motion.div>
         </div>
 
         {/* HOMEWORKS LIST */}
@@ -310,14 +387,17 @@ export default function StudentDashboardPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {homeworks.map((hw) => {
+              {homeworks.map((hw, idx) => {
                 const sub = hw.mySubmission;
                 const isUploadingThis = activeUploadHwId === hw.id;
 
                 return (
-                  <div
+                  <motion.div
                     key={hw.id}
-                    className="rounded-3xl p-6 sm:p-7 bg-white/85 backdrop-blur-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all space-y-6"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * idx, duration: 0.4 }}
+                    className="rounded-3xl p-6 sm:p-7 bg-white/85 backdrop-blur-xl border border-white/90 shadow-sm hover:shadow-xl hover:border-blue-300/60 transition-all space-y-6"
                   >
                     {/* Top Bar: Homework Title, Group, Date, Submission Status */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
@@ -594,7 +674,7 @@ export default function StudentDashboardPage() {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>

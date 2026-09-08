@@ -14,23 +14,45 @@ export async function GET() {
     await ensureDatabaseReady();
     const db = getDb();
 
-    const studentList = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        fullName: users.fullName,
-        groupId: users.groupId,
-        groupName: groups.name,
-        isActive: users.isActive,
-        createdAt: users.createdAt,
-        initialPassword: users.initialPassword,
-      })
-      .from(users)
-      .leftJoin(groups, eq(users.groupId, groups.id))
-      .where(eq(users.role, "STUDENT"))
-      .orderBy(desc(users.createdAt));
+    try {
+      const studentList = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName,
+          groupId: users.groupId,
+          groupName: groups.name,
+          isActive: users.isActive,
+          createdAt: users.createdAt,
+          initialPassword: users.initialPassword,
+        })
+        .from(users)
+        .leftJoin(groups, eq(users.groupId, groups.id))
+        .where(eq(users.role, "STUDENT"))
+        .orderBy(desc(users.createdAt));
 
-    return NextResponse.json({ students: studentList });
+      return NextResponse.json({ students: studentList });
+    } catch (queryErr) {
+      console.warn("Talabalar ro'yxatini olishda fallback rejimi ishga tushdi:", queryErr);
+      const studentList = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName,
+          groupId: users.groupId,
+          groupName: groups.name,
+          isActive: users.isActive,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .leftJoin(groups, eq(users.groupId, groups.id))
+        .where(eq(users.role, "STUDENT"))
+        .orderBy(desc(users.createdAt));
+
+      return NextResponse.json({
+        students: studentList.map((s) => ({ ...s, initialPassword: null })),
+      });
+    }
   } catch (error) {
     console.error("Talabalar ro'yxatini olishda xatolik:", error);
     return NextResponse.json({ error: "Serverda xatolik yuz berdi." }, { status: 500 });

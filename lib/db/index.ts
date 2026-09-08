@@ -66,10 +66,17 @@ export async function ensureDatabaseReady() {
     `;
 
     // users jadvaliga group_id va initial_password qo'shish (agar mavjud bo'lmasa)
-    await sql`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS group_id TEXT REFERENCES groups(id) ON DELETE SET NULL;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS initial_password TEXT;
-    `;
+    try {
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS group_id TEXT REFERENCES groups(id) ON DELETE SET NULL`;
+    } catch (e) {
+      console.warn("users.group_id migration notice:", e);
+    }
+
+    try {
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS initial_password TEXT`;
+    } catch (e) {
+      console.warn("users.initial_password migration notice:", e);
+    }
 
     // 3. homeworks jadvali (O'qituvchi ochadigan uy ishlari)
     await sql`
@@ -100,9 +107,11 @@ export async function ensureDatabaseReady() {
     `;
 
     // submissions jadvaliga homework_id qo'shish (agar mavjud bo'lmasa)
-    await sql`
-      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS homework_id TEXT REFERENCES homeworks(id) ON DELETE CASCADE;
-    `;
+    try {
+      await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS homework_id TEXT REFERENCES homeworks(id) ON DELETE CASCADE`;
+    } catch (e) {
+      console.warn("submissions.homework_id migration notice:", e);
+    }
 
     // 5. review_comments jadvali
     await sql`
