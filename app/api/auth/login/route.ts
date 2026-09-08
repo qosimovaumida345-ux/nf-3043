@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       username: user.username,
       role: user.role as "ADMIN" | "STUDENT",
       fullName: user.fullName,
+      groupId: user.groupId,
     });
 
     const response = NextResponse.json({
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
         username: user.username,
         role: user.role,
         fullName: user.fullName,
+        groupId: user.groupId,
       },
     });
 

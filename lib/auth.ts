@@ -10,6 +10,7 @@ export interface AuthUser {
   username: string;
   role: "ADMIN" | "STUDENT";
   fullName: string;
+  groupId?: string | null;
 }
 
 export async function hashPassword(password: string): Promise<string> {

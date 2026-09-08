@@ -31,7 +31,12 @@ export async function GET() {
         .where(eq(users.role, "STUDENT"))
         .orderBy(desc(users.createdAt));
 
-      return NextResponse.json({ students: studentList });
+      const mapped = studentList.map((st) => ({
+        ...st,
+        initialPassword: st.initialPassword || st.username + "123",
+      }));
+
+      return NextResponse.json({ students: mapped });
     } catch (queryErr) {
       console.warn("Talabalar ro'yxatini olishda fallback rejimi ishga tushdi:", queryErr);
       const studentList = await db
@@ -50,7 +55,7 @@ export async function GET() {
         .orderBy(desc(users.createdAt));
 
       return NextResponse.json({
-        students: studentList.map((s) => ({ ...s, initialPassword: null })),
+        students: studentList.map((s) => ({ ...s, initialPassword: s.username + "123" })),
       });
     }
   } catch (error) {

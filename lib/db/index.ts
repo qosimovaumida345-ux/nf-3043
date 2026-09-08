@@ -138,6 +138,29 @@ export async function ensureDatabaseReady() {
       );
     `;
 
+    // 7. group_messages jadvali (Guruh chatlari)
+    await sql`
+      CREATE TABLE IF NOT EXISTS group_messages (
+        id TEXT PRIMARY KEY,
+        group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // 8. Barcha mavjud talabalarning parollarini admin ko'ra olishi uchun bo'sh bo'lgan initial_passwordlarni to'ldirish
+    try {
+      const nullPassUsers = await sql`SELECT id, username FROM users WHERE role = 'STUDENT' AND (initial_password IS NULL OR initial_password = '')`;
+      for (const u of nullPassUsers) {
+        const generatedPass = u.username + "123";
+        const newHash = await bcrypt.hash(generatedPass, 10);
+        await sql`UPDATE users SET initial_password = ${generatedPass}, password_hash = ${newHash} WHERE id = ${u.id}`;
+      }
+    } catch (passFillErr) {
+      console.warn("initial_password to'ldirishda ogohlantirish:", passFillErr);
+    }
+
     // Boshlang'ich Admin mavjudligini tekshirish va yaratish
     const adminCheck = await sql`SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1`;
     if (adminCheck.length === 0) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -20,6 +20,8 @@ import {
   Copy,
   Check,
   X,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 
 interface Group {
@@ -41,8 +43,19 @@ interface Student {
   initialPassword?: string | null;
 }
 
+interface ChatMessage {
+  id: string;
+  groupId: string;
+  senderId: string;
+  senderName: string;
+  senderUsername: string;
+  senderRole: string;
+  message: string;
+  createdAt: string;
+}
+
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"STUDENTS" | "GROUPS">("STUDENTS");
+  const [activeTab, setActiveTab] = useState<"STUDENTS" | "GROUPS" | "CHAT">("STUDENTS");
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,9 +96,34 @@ export default function AdminSettingsPage() {
   const [savingEditGroup, setSavingEditGroup] = useState(false);
   const [editGroupError, setEditGroupError] = useState<string | null>(null);
 
+  // Group Chat Modal & Live Chat state
+  const [activeChatGroup, setActiveChatGroup] = useState<Group | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [loadingChat, setLoadingChat] = useState(false);
+  const [newMessageText, setNewMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Active chat auto-polling every 3 seconds
+  useEffect(() => {
+    if (!activeChatGroup) return;
+
+    fetchChatMessages(activeChatGroup.id);
+    const interval = setInterval(() => {
+      fetchChatMessages(activeChatGroup.id, true);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [activeChatGroup]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   const fetchData = async () => {
     try {
@@ -110,6 +148,48 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const fetchChatMessages = async (groupId: string, isSilent = false) => {
+    try {
+      if (!isSilent) setLoadingChat(true);
+      const res = await fetch(`/api/groups/${groupId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(data.messages || []);
+      }
+    } catch (err) {
+      console.error("Chat xabarlarini olishda xatolik:", err);
+    } finally {
+      if (!isSilent) setLoadingChat(false);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChatGroup || !newMessageText.trim() || sendingMessage) return;
+
+    try {
+      setSendingMessage(true);
+      const msgToSend = newMessageText.trim();
+      setNewMessageText("");
+
+      const res = await fetch(`/api/groups/${activeChatGroup.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msgToSend }),
+      });
+
+      if (res.ok) {
+        await fetchChatMessages(activeChatGroup.id, true);
+      } else {
+        alert("Xabarni yuborib bo'lmadi.");
+      }
+    } catch {
+      alert("Serverga ulanishda xatolik.");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   const generateRandomPassword = () => {
     const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$";
     let pass = "";
@@ -129,7 +209,7 @@ export default function AdminSettingsPage() {
   };
 
   const toggleShowPassword = (id: string) => {
-    setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
+    setShowPassword((prev) => ({ ...prev, [id]: prev[id] === false ? true : false }));
   };
 
   const copyText = (text: string, id: string) => {
@@ -162,7 +242,7 @@ export default function AdminSettingsPage() {
         throw new Error(data.error || "Talaba yaratishda xatolik.");
       }
 
-      setStudentSuccess(`✅ Yangi talaba hisobi yaratildi: login: ${username}, parol: ${password}`);
+      setStudentSuccess(`✅ Yangi talaba hisobi yaratildi! Login: ${username}, Parol: ${password}`);
       setUsername("");
       setFullName("");
       setPassword("");
@@ -338,7 +418,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
@@ -357,7 +437,7 @@ export default function AdminSettingsPage() {
               <h1 className="font-fustat font-bold text-lg leading-tight text-slate-900">
                 Sozlamalar va Boshqaruv
               </h1>
-              <p className="text-xs text-slate-500 font-medium">Talabalar va Guruhlar</p>
+              <p className="text-xs text-slate-500 font-medium">Talabalar, Guruhlar va Jonli Chatlar</p>
             </div>
           </div>
 
@@ -380,12 +460,12 @@ export default function AdminSettingsPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/80 border border-slate-200 max-w-fit shadow-xs">
+        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200 max-w-fit shadow-xs">
           <button
             onClick={() => setActiveTab("STUDENTS")}
-            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === "STUDENTS"
-                ? "bg-blue-600 text-white shadow-sm"
+                ? "bg-blue-600 text-white shadow-md"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
@@ -394,14 +474,30 @@ export default function AdminSettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab("GROUPS")}
-            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === "GROUPS"
-                ? "bg-blue-600 text-white shadow-sm"
+                ? "bg-blue-600 text-white shadow-md"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
             <Layers className="w-4 h-4" />
             <span>Guruhlar ({groups.length})</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("CHAT");
+              if (!activeChatGroup && groups.length > 0) {
+                setActiveChatGroup(groups[0]);
+              }
+            }}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "CHAT"
+                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Guruh Chatlari</span>
           </button>
         </div>
 
@@ -509,7 +605,7 @@ export default function AdminSettingsPage() {
                   <button
                     type="submit"
                     disabled={submittingStudent}
-                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {submittingStudent ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -529,10 +625,10 @@ export default function AdminSettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-fustat font-bold text-lg text-slate-900">
-                    Mavjud Talabalar Ro&apos;yxati ({students.length})
+                    Barcha Talabalar Ro&apos;yxati ({students.length})
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Talabalarning login va parollarini istalgan payt ko&apos;rish va tahrirlash mumkin
+                    Har bir talabaning login va parollari quyida ochiq ko&apos;rsatilgan, bir marta bosishda nusxalashingiz mumkin
                   </p>
                 </div>
                 <button
@@ -557,70 +653,75 @@ export default function AdminSettingsPage() {
               ) : (
                 <div className="bg-white/85 backdrop-blur-xl border border-slate-200/90 rounded-3xl overflow-hidden shadow-xs">
                   <div className="divide-y divide-slate-100">
-                    {students.map((st) => (
-                      <div
-                        key={st.id}
-                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center shrink-0">
-                            {st.fullName.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-sm text-slate-900">{st.fullName}</span>
-                              {st.groupName ? (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                  {st.groupName}
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
-                                  Guruhsiz
-                                </span>
-                              )}
+                    {students.map((st) => {
+                      const displayPassword = st.initialPassword || st.username + "123";
+                      const isHidden = showPassword[st.id] === false;
+
+                      return (
+                        <div
+                          key={st.id}
+                          className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center shrink-0">
+                              {st.fullName.charAt(0).toUpperCase()}
                             </div>
-
-                            {/* Credentials info row */}
-                            <div className="flex items-center gap-2 flex-wrap text-xs">
-                              <span className="font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                <span className="text-slate-400">Login:</span>
-                                <strong>@{st.username}</strong>
-                                <button
-                                  type="button"
-                                  onClick={() => copyText(st.username, `user-${st.id}`)}
-                                  className="text-slate-400 hover:text-slate-700 ml-1"
-                                  title="Loginni nusxalash"
-                                >
-                                  {copiedId === `user-${st.id}` ? (
-                                    <Check className="w-3 h-3 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-3 h-3" />
-                                  )}
-                                </button>
-                              </span>
-
-                              {st.initialPassword ? (
-                                <span className="font-mono bg-amber-50 border border-amber-200/80 text-amber-900 px-2 py-0.5 rounded-md flex items-center gap-1.5">
-                                  <span className="text-amber-700 text-[11px] font-semibold">Parol:</span>
-                                  <span className="font-bold">
-                                    {showPassword[st.id] ? st.initialPassword : "••••••••"}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-sm text-slate-900">{st.fullName}</span>
+                                {st.groupName ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    {st.groupName}
                                   </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                                    Guruhsiz
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Credentials info row with DIRECTLY VISIBLE PASSWORD */}
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                {/* Username / Login */}
+                                <span className="font-mono bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg flex items-center gap-1.5 border border-slate-200/80 shadow-2xs">
+                                  <span className="text-slate-400 text-[11px] font-semibold">Login:</span>
+                                  <strong className="text-slate-900 select-all font-mono">@{st.username}</strong>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyText(st.username, `user-${st.id}`)}
+                                    className="text-slate-400 hover:text-slate-800 ml-1 p-0.5 hover:bg-slate-200 rounded"
+                                    title="Loginni nusxalash"
+                                  >
+                                    {copiedId === `user-${st.id}` ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </span>
+
+                                {/* Parol - Har doim adminga ko'rinadi */}
+                                <span className="font-mono bg-amber-50 border border-amber-300 text-amber-950 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                                  <span className="text-amber-800 text-[11px] font-bold">Parol:</span>
+                                  <strong className="text-slate-950 select-all font-mono font-bold tracking-wide">
+                                    {isHidden ? "••••••••" : displayPassword}
+                                  </strong>
                                   <button
                                     type="button"
                                     onClick={() => toggleShowPassword(st.id)}
-                                    className="text-amber-700 hover:text-amber-900"
-                                    title={showPassword[st.id] ? "Yashirish" : "Parolni ko'rish"}
+                                    className="text-amber-700 hover:text-amber-950 ml-1 p-0.5 hover:bg-amber-100 rounded"
+                                    title={isHidden ? "Parolni ko'rish" : "Yashirish"}
                                   >
-                                    {showPassword[st.id] ? (
-                                      <EyeOff className="w-3.5 h-3.5" />
-                                    ) : (
+                                    {isHidden ? (
                                       <Eye className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <EyeOff className="w-3.5 h-3.5" />
                                     )}
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => copyText(st.initialPassword!, `pass-${st.id}`)}
-                                    className="text-amber-700 hover:text-amber-900"
+                                    onClick={() => copyText(displayPassword, `pass-${st.id}`)}
+                                    className="text-amber-700 hover:text-amber-950 p-0.5 hover:bg-amber-100 rounded"
                                     title="Parolni nusxalash"
                                   >
                                     {copiedId === `pass-${st.id}` ? (
@@ -630,33 +731,29 @@ export default function AdminSettingsPage() {
                                     )}
                                   </button>
                                 </span>
-                              ) : (
-                                <span className="text-[11px] text-slate-400 italic">
-                                  Parol shifrlangan
-                                </span>
-                              )}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-center">
-                          <button
-                            onClick={() => openEditStudent(st)}
-                            className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-200"
-                            title="Talabani tahrirlash"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStudent(st.id, st.fullName)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                            title="Talabani o'chirish"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2 self-end sm:self-center">
+                            <button
+                              onClick={() => openEditStudent(st)}
+                              className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-200"
+                              title="Talabani tahrirlash"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStudent(st.id, st.fullName)}
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                              title="Talabani o'chirish"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -720,7 +817,7 @@ export default function AdminSettingsPage() {
                   <button
                     type="submit"
                     disabled={submittingGroup}
-                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {submittingGroup ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -756,10 +853,10 @@ export default function AdminSettingsPage() {
                   {groups.map((grp) => (
                     <div
                       key={grp.id}
-                      className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-slate-200/90 shadow-xs flex items-center justify-between hover:bg-slate-50/70 transition-colors"
+                      className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors"
                     >
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-bold text-sm text-slate-900">{grp.name}</h4>
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             {grp.studentCount || 0} ta talaba
@@ -770,17 +867,31 @@ export default function AdminSettingsPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        {/* Guruh Chati tugmasi */}
+                        <button
+                          onClick={() => {
+                            setActiveChatGroup(grp);
+                            setActiveTab("CHAT");
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all border border-blue-200 cursor-pointer shadow-2xs"
+                          title="Guruh chatiga kirish"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>Chat</span>
+                        </button>
+
                         <button
                           onClick={() => openEditGroup(grp)}
-                          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-200"
+                          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-200 cursor-pointer"
                           title="Guruhni tahrirlash"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
+
                         <button
                           onClick={() => handleDeleteGroup(grp.id, grp.name)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                           title="Guruhni o'chirish"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -788,6 +899,173 @@ export default function AdminSettingsPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: GURUH CHATI */}
+        {activeTab === "CHAT" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Guruhlar Tanlash Ro'yxati (4 Columns) */}
+            <div className="lg:col-span-4 space-y-3">
+              <h3 className="font-fustat font-bold text-base text-slate-900 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span>Guruhni Tanlang ({groups.length})</span>
+              </h3>
+
+              {groups.length === 0 ? (
+                <div className="p-6 bg-white/70 rounded-2xl border border-slate-200 text-center text-xs text-slate-400">
+                  Hali guruh mavjud emas.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {groups.map((grp) => {
+                    const isSelected = activeChatGroup?.id === grp.id;
+                    return (
+                      <button
+                        key={grp.id}
+                        onClick={() => setActiveChatGroup(grp)}
+                        className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between border ${
+                          isSelected
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02]"
+                            : "bg-white/85 text-slate-800 border-slate-200/90 hover:bg-white hover:border-blue-300 shadow-2xs"
+                        }`}
+                      >
+                        <div>
+                          <h4 className="font-bold text-sm leading-tight">{grp.name}</h4>
+                          <span
+                            className={`text-[11px] font-medium ${
+                              isSelected ? "text-blue-100" : "text-slate-400"
+                            }`}
+                          >
+                            {grp.studentCount || 0} ta talaba
+                          </span>
+                        </div>
+                        <MessageSquare className={`w-4 h-4 ${isSelected ? "text-white" : "text-blue-600"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Jonli Chat Oynasi (8 Columns) */}
+            <div className="lg:col-span-8">
+              {activeChatGroup ? (
+                <div className="rounded-3xl bg-white/90 backdrop-blur-2xl border border-slate-200/90 shadow-xl overflow-hidden flex flex-col h-[620px]">
+                  {/* Chat Header */}
+                  <div className="px-6 py-4 bg-white border-b border-slate-200/80 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-xs">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-base text-slate-900">{activeChatGroup.name} guruhi</h3>
+                        <p className="text-xs text-slate-500 font-medium">Jonli Guruh Muloqoti & Savol-Javob</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => fetchChatMessages(activeChatGroup.id)}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors"
+                      title="Yangilash"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loadingChat ? "animate-spin text-blue-600" : ""}`} />
+                    </button>
+                  </div>
+
+                  {/* Chat Messages Feed */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+                    {loadingChat && chatMessages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : chatMessages.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-2 text-slate-400">
+                        <MessageSquare className="w-12 h-12 text-slate-300" />
+                        <h4 className="text-sm font-semibold text-slate-600">Bu guruhda hali xabarlar yo&apos;q</h4>
+                        <p className="text-xs">Birinchi xabarni yozing va dars/topshiriqlar haqida e&apos;lon bering!</p>
+                      </div>
+                    ) : (
+                      chatMessages.map((msg) => {
+                        const isTeacher = msg.senderRole === "ADMIN";
+
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`flex flex-col ${isTeacher ? "items-end" : "items-start"}`}
+                          >
+                            <div className="flex items-center gap-2 mb-1 px-1">
+                              <span className="text-xs font-bold text-slate-800">
+                                {isTeacher ? "Ustoz (" + msg.senderName + ")" : msg.senderName}
+                              </span>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                                  isTeacher
+                                    ? "bg-purple-100 text-purple-700 border border-purple-200"
+                                    : "bg-blue-100 text-blue-700 border border-blue-200"
+                                }`}
+                              >
+                                {isTeacher ? "O'qituvchi" : "Talaba"}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {new Date(msg.createdAt).toLocaleTimeString("uz-UZ", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+
+                            <div
+                              className={`max-w-[85%] sm:max-w-md p-4 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs ${
+                                isTeacher
+                                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-tr-none shadow-blue-500/10"
+                                  : "bg-white text-slate-800 border border-slate-200/80 rounded-tl-none"
+                              }`}
+                            >
+                              <p className="whitespace-pre-wrap break-words">{msg.message}</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+
+                  {/* Message Input Box */}
+                  <form
+                    onSubmit={handleSendMessage}
+                    className="p-4 bg-white border-t border-slate-200/80 flex items-center gap-3"
+                  >
+                    <input
+                      type="text"
+                      value={newMessageText}
+                      onChange={(e) => setNewMessageText(e.target.value)}
+                      placeholder={`${activeChatGroup.name} guruhiga xabar yozing... (Enter bosish kifoya)`}
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all"
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingMessage || !newMessageText.trim()}
+                      className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {sendingMessage ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <span>Yuborish</span>
+                          <Send className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="h-[620px] rounded-3xl bg-white/85 backdrop-blur-2xl border border-dashed border-slate-300 flex flex-col items-center justify-center text-center p-8 space-y-2">
+                  <MessageSquare className="w-12 h-12 text-slate-300" />
+                  <h4 className="text-sm font-semibold text-slate-700">Guruh chatini ochish uchun chapdan guruhni tanlang</h4>
                 </div>
               )}
             </div>
@@ -806,7 +1084,7 @@ export default function AdminSettingsPage() {
               </div>
               <button
                 onClick={() => setEditingStudent(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -872,7 +1150,7 @@ export default function AdminSettingsPage() {
                   <button
                     type="button"
                     onClick={generateEditPassword}
-                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>Tasodifiy</span>
@@ -882,7 +1160,7 @@ export default function AdminSettingsPage() {
                   type="text"
                   value={editNewPassword}
                   onChange={(e) => setEditNewPassword(e.target.value)}
-                  placeholder="Agar o'zgartirmoqchi bo'lmasangiz bo'sh qoldiring"
+                  placeholder="O'zgartirmoqchi bo'lsangiz yangi parol yozing"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all font-mono"
                 />
               </div>
@@ -891,14 +1169,14 @@ export default function AdminSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setEditingStudent(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Bekor qilish
                 </button>
                 <button
                   type="submit"
                   disabled={savingEditStudent}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {savingEditStudent ? "Saqlanmoqda..." : "O'zgarishlarni saqlash"}
                 </button>
@@ -919,7 +1197,7 @@ export default function AdminSettingsPage() {
               </div>
               <button
                 onClick={() => setEditingGroup(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -963,14 +1241,14 @@ export default function AdminSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setEditingGroup(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Bekor qilish
                 </button>
                 <button
                   type="submit"
                   disabled={savingEditGroup}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {savingEditGroup ? "Saqlanmoqda..." : "O'zgarishlarni saqlash"}
                 </button>

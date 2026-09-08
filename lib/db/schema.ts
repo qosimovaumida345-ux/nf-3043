@@ -62,6 +62,14 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const groupMessages = pgTable("group_messages", {
+  id: text("id").primaryKey(),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  senderId: text("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Group = typeof groups.$inferSelect;
 export type NewGroup = typeof groups.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -73,3 +81,5 @@ export type NewSubmission = typeof submissions.$inferInsert;
 export type ReviewComment = typeof reviewComments.$inferSelect;
 export type NewReviewComment = typeof reviewComments.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
+export type GroupMessage = typeof groupMessages.$inferSelect;
+export type NewGroupMessage = typeof groupMessages.$inferInsert;
