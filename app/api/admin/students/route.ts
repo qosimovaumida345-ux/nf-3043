@@ -23,6 +23,7 @@ export async function GET() {
         groupName: groups.name,
         isActive: users.isActive,
         createdAt: users.createdAt,
+        initialPassword: users.initialPassword,
       })
       .from(users)
       .leftJoin(groups, eq(users.groupId, groups.id))
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
       id: newStudentId,
       username: cleanUsername,
       passwordHash,
+      initialPassword: password,
       role: "STUDENT",
       fullName: fullName.trim(),
       groupId: groupId || null,

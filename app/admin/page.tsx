@@ -303,7 +303,7 @@ export default function AdminDashboardPage() {
                 <h1 className="font-fustat font-bold text-lg leading-tight text-slate-900">
                   Mars IT <span className="text-blue-600 text-xs font-normal">O&apos;qituvchi Paneli</span>
                 </h1>
-                <p className="text-xs text-slate-500 font-medium">NF-3043 Guruhi</p>
+                <p className="text-xs text-slate-500 font-medium">Kod Tekshirish Platformasi</p>
               </div>
             </Link>
 

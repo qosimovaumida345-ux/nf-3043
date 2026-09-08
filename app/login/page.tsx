@@ -63,7 +63,7 @@ function LoginForm() {
             className="w-12 h-12 rounded-2xl object-contain shadow-md border border-slate-200/60 bg-slate-950/5"
           />
           <span className="font-fustat font-bold text-2xl tracking-tight text-slate-900">
-            Mars IT <span className="text-blue-600 text-sm font-normal">NF-3043</span>
+            Mars IT <span className="text-blue-600 text-sm font-normal">Code Review</span>
           </span>
         </Link>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">

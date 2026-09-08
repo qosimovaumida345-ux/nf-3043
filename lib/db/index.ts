@@ -65,9 +65,10 @@ export async function ensureDatabaseReady() {
       );
     `;
 
-    // users jadvaliga group_id qo'shish (agar mavjud bo'lmasa)
+    // users jadvaliga group_id va initial_password qo'shish (agar mavjud bo'lmasa)
     await sql`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS group_id TEXT REFERENCES groups(id) ON DELETE SET NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS initial_password TEXT;
     `;
 
     // 3. homeworks jadvali (O'qituvchi ochadigan uy ishlari)

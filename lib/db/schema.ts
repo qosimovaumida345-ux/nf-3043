@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 20 }).notNull().default("STUDENT"), // 'ADMIN' | 'STUDENT'
   fullName: varchar("full_name", { length: 150 }).notNull(),
   groupId: text("group_id").references(() => groups.id, { onDelete: "set null" }),
+  initialPassword: text("initial_password"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

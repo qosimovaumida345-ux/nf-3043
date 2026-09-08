@@ -1,251 +1,391 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Star, Code2, ShieldCheck, Zap, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowUpRight, X, LogIn, Sparkles, BookOpen, Layers, MessageSquareQuote } from "lucide-react";
 
-export default function HomePage() {
+const fadeDown = {
+  initial: { opacity: 0, y: -20 },
+  animate: (custom: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: custom * 0.1,
+      duration: 0.5,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  }),
+};
+
+const fadeUp = {
+  initial: { opacity: 0, y: 32 },
+  animate: (custom: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: custom * 0.12,
+      duration: 0.6,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  }),
+};
+
+const wordSlideUp = {
+  initial: { y: "110%" },
+  animate: (i: number) => ({
+    y: 0,
+    transition: {
+      delay: 0.4 + i * 0.14,
+      duration: 0.7,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  }),
+};
+
+const stats = [
+  { value: "300", plus: "+", label: "CRAFTED\nBRANDS", custom: 2 },
+  { value: "200", plus: "+", label: "DIGITAL\nPRODUCTS", custom: 3 },
+  { value: "100", plus: "+", label: "VENTURES\nFUNDED", custom: 4 },
+];
+
+const headingWords = ["Fearless", "Vision", "Delivered"];
+
+const navItems = [
+  {
+    name: "Story",
+    id: "story",
+    icon: BookOpen,
+    desc: "Mars IT akademiyasining zamonaviy ta'lim falsafasi va dasturlash o'rganuvchilari uchun kundalik kod tahlili standartlari.",
+  },
+  {
+    name: "Expertise",
+    id: "expertise",
+    icon: Sparkles,
+    desc: "Frontend, Backend va Full-stack yo'nalishlarida real loyihalar, o'qituvchi bilan jonli SSE oqimi orqali kod tekshiruvi.",
+  },
+  {
+    name: "Studios",
+    id: "studios",
+    icon: Layers,
+    desc: "O'quv guruhlari, topshiriqlar va kundalik vazifalar laboratoriyasi. Har bir talabaning shaxsiy ko'nikma o'sishi.",
+  },
+  {
+    name: "Feedback",
+    id: "feedback",
+    icon: MessageSquareSquareIcon,
+    desc: "Ustoz tomonidan har bir yuborilgan topshiriqqa batafsil yozma tahlil, xatolar tushuntirilishi va natija berilishi.",
+  },
+];
+
+function MessageSquareSquareIcon(props: React.SVGProps<SVGSVGElement>) {
+  return <MessageSquareQuote {...props} />;
+}
+
+export default function HeroPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeModalItem, setActiveModalItem] = useState<{
+    name: string;
+    desc: string;
+  } | null>(null);
+
   return (
-    <main className="relative min-h-screen bg-white overflow-hidden text-slate-900 selection:bg-blue-100 selection:text-blue-900">
-      {/* 1. Subtle, layered gradient glow in the top-left (#60B1FF va #319AFF) */}
-      <div className="pointer-events-none absolute -top-[120px] -left-[120px] w-[650px] h-[650px] rounded-full bg-[#60B1FF]/30 blur-[130px] -z-10" />
-      <div className="pointer-events-none absolute top-[80px] left-[60px] w-[450px] h-[450px] rounded-full bg-[#319AFF]/25 blur-[110px] -z-10" />
-      <div className="pointer-events-none absolute top-[300px] right-[-100px] w-[500px] h-[500px] rounded-full bg-blue-100/40 blur-[140px] -z-10" />
+    <div
+      className="relative flex flex-col min-h-screen overflow-hidden text-black font-semibold uppercase tracking-widest select-none"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
+      {/* 1. Full-screen Autoplaying Looping Muted Video Background */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none -z-10"
+        src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260517_222138_3e3205be-3364-417b-a64a-bfe087acbec4.mp4"
+      />
 
-      {/* 2. The "Strong Liquid Glass" Navbar */}
-      <header className="sticky top-[30px] z-50 flex justify-center px-4 w-full">
-        <nav
-          className="liquid-glass-navbar flex items-center justify-between gap-6 md:gap-12 px-6 py-3 rounded-[16px] max-w-fit shadow-sm"
-          style={{
-            backdropFilter: "blur(50px)",
-            WebkitBackdropFilter: "blur(50px)",
-            background: "rgba(255, 255, 255, 0.4)",
-            border: "1px solid rgba(0, 0, 0, 0.1)",
-            boxShadow: "inset 0px 4px 4px 0px rgba(255, 255, 255, 0.25), 0 10px 25px -5px rgba(0,0,0,0.04)",
-          }}
+      {/* Subtle overlay to guarantee crisp text legibility if needed */}
+      <div className="absolute inset-0 bg-white/5 pointer-events-none -z-10" />
+
+      {/* 2. Top Navigation Bar */}
+      <header className="w-full flex items-center justify-between px-5 sm:px-8 md:px-12 pt-5 md:pt-6 z-40">
+        {/* Left: Circular Logo (32px div, 2px border in #5E0ED7, 10px solid circle inside in #5E0ED7) */}
+        <motion.div
+          custom={0}
+          initial="initial"
+          animate="animate"
+          variants={fadeDown}
+          className="flex items-center gap-3"
         >
-          {/* Logo Mars IT */}
-          <Link href="/" className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="Mars IT Logo"
-              className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/60 bg-slate-950/5"
-            />
-            <span className="font-fustat font-bold text-xl tracking-tight text-slate-900">
-              Mars IT <span className="text-blue-600 text-sm font-normal">NF-3043</span>
-            </span>
+          <Link
+            href="/"
+            aria-label="Home"
+            className="w-[32px] h-[32px] rounded-full border-[2px] border-[#5E0ED7] flex items-center justify-center hover:scale-105 transition-transform"
+          >
+            <div className="w-[10px] h-[10px] rounded-full bg-[#5E0ED7]" />
           </Link>
+        </motion.div>
 
-          {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-            <Link href="#features" className="hover:text-blue-600 transition-colors">
-              Xususiyatlar
-            </Link>
-            <Link href="#architecture" className="hover:text-blue-600 transition-colors">
-              Arxitektura
-            </Link>
-            <Link href="#workflow" className="hover:text-blue-600 transition-colors">
-              Jarayon
-            </Link>
-            <Link href="/login" className="hover:text-blue-600 transition-colors">
-              Talabalar
-            </Link>
-          </div>
+        {/* Center: 4 Nav Links (hidden on mobile, visible md+) */}
+        <nav className="hidden md:flex items-center gap-8">
+          {navItems.map((item, idx) => (
+            <motion.button
+              key={item.name}
+              custom={idx + 1}
+              initial="initial"
+              animate="animate"
+              variants={fadeDown}
+              onClick={() => setActiveModalItem({ name: item.name, desc: item.desc })}
+              className="text-[14px] font-semibold tracking-widest uppercase text-black hover:text-[#5E0ED7] transition-colors cursor-pointer"
+            >
+              {item.name}
+            </motion.button>
+          ))}
+        </nav>
 
-          {/* Glassy SignUp / Login Button */}
+        {/* Right: Hamburger button (36px round black button with 3 white lines) + Login CTA */}
+        <motion.div
+          custom={5}
+          initial="initial"
+          animate="animate"
+          variants={fadeDown}
+          className="flex items-center gap-3"
+        >
           <Link
             href="/login"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-900 bg-white/60 hover:bg-white/90 border border-black/10 rounded-[12px] shadow-sm transition-all hover:scale-105 active:scale-95"
-            style={{
-              boxShadow: "inset 0px 2px 3px 0px rgba(255,255,255,0.4)",
-            }}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-black/20 bg-white/70 hover:bg-black hover:text-white text-[11px] font-semibold tracking-wider transition-all"
           >
-            <span>Tizimga kirish</span>
-            <ArrowRight className="w-4 h-4 text-blue-600" />
+            <LogIn className="w-3.5 h-3.5" />
+            <span>KIRISH</span>
           </Link>
-        </nav>
+
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open navigation menu"
+            className="w-[36px] h-[36px] rounded-full bg-black flex flex-col items-center justify-center gap-1 hover:scale-105 transition-transform shadow-md cursor-pointer"
+          >
+            <span className="w-4 h-0.5 bg-white block" />
+            <span className="w-4 h-0.5 bg-white block" />
+            <span className="w-4 h-0.5 bg-white block" />
+          </button>
+        </motion.div>
       </header>
 
-      {/* 3. Hero Section (1600px Max-Width, Dual-Column Desktop) */}
-      <section className="relative z-10 max-w-[1600px] mx-auto px-6 md:px-12 pt-12 md:pt-16 pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center min-h-[620px]">
-          
-          {/* HERO CONTENT (HERO LEFT) - 7 Columns on Desktop */}
-          <div className="lg:col-span-7 flex flex-col items-start space-y-6 pt-4">
-            
-            {/* Social Proof Badge */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-50/80 border border-slate-200/80 shadow-xs">
-              <div className="flex items-center gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-[#FF801E] text-[#FF801E]" />
-                ))}
-              </div>
-              <span className="text-xs font-semibold text-slate-700 tracking-tight">
-                Rated 4.9/5 by 2700+ customers
-              </span>
-              <span className="text-[11px] font-medium text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded-full">
-                Mars IT Code Review
-              </span>
-            </div>
-
-            {/* Hero Headline: 75px, 1.05 line-height, -2px tracking */}
-            <h1
-              className="font-fustat font-bold text-slate-950 text-balance"
-              style={{
-                fontSize: "clamp(44px, 6vw, 75px)",
-                lineHeight: "1.05",
-                letterSpacing: "-2px",
-              }}
+      {/* 3. Middle Section: Stats Row (flex-1, vertically centered, right-aligned) */}
+      <main className="flex-1 flex items-center justify-end px-5 sm:px-8 md:px-12 py-8 md:py-0 z-20">
+        <div className="flex items-start justify-end gap-5 sm:gap-8 md:gap-10">
+          {stats.map((st) => (
+            <motion.div
+              key={st.label}
+              custom={st.custom}
+              initial="initial"
+              animate="animate"
+              variants={fadeUp}
+              className="flex flex-col items-end text-right"
             >
-              Work smarter, achieve faster
-            </h1>
-
-            {/* Subheadline: 18px, Inter, -1px tracking */}
-            <p
-              className="font-inter text-slate-600 text-balance max-w-[620px]"
-              style={{
-                fontSize: "18px",
-                lineHeight: "1.6",
-                letterSpacing: "-0.5px",
-              }}
-            >
-              Effortlessly manage your projects, collaborate with your team, and achieve your goals with our intuitive task management tool. Telegram orqali bittalab tekshirish o&apos;rniga barcha talabalar kodini bitta xavfsiz boshqaruv panelida tekshiring.
-            </p>
-
-            {/* Primary CTA Button */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2 w-full sm:w-auto">
-              <Link
-                href="/login"
-                className="liquid-glass-button inline-flex items-center justify-center gap-3 px-8 py-4 rounded-[16px] text-white font-medium shadow-lg hover:shadow-blue-500/25"
-                style={{
-                  background: "rgba(0, 132, 255, 0.85)",
-                  backdropFilter: "blur(2px)",
-                  WebkitBackdropFilter: "blur(2px)",
-                  boxShadow: "inset 0px 4px 4px 0px rgba(255, 255, 255, 0.35), 0 10px 30px -5px rgba(0, 132, 255, 0.4)",
-                  transition: "transform 0.2s ease, background-color 0.2s ease",
-                }}
-              >
-                <span className="font-semibold text-base tracking-tight">Get Started Now</span>
-                <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-                  <ArrowRight className="w-4 h-4 text-white" />
-                </span>
-              </Link>
-
-              <div className="flex items-center gap-3 px-4 py-2 text-xs text-slate-500">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Admin tomonidan kafolatlangan ma&apos;lumotlar izolyatsiyasi</span>
-              </div>
-            </div>
-
-            {/* Feature Highlights pill cards */}
-            <div className="grid grid-cols-3 gap-3 pt-6 w-full max-w-[620px]">
-              <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/60 shadow-xs">
-                <Code2 className="w-5 h-5 text-blue-600 mb-1.5" />
-                <div className="text-xs font-semibold text-slate-800">Kundalik kod surati</div>
-                <div className="text-[11px] text-slate-500">Avtomatik vaqt tamg&apos;asi</div>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/60 shadow-xs">
-                <Zap className="w-5 h-5 text-amber-500 mb-1.5" />
-                <div className="text-xs font-semibold text-slate-800">Real-vaqtda SSE</div>
-                <div className="text-[11px] text-slate-500">Refreshsiz bildirishnoma</div>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/60 shadow-xs">
-                <Sparkles className="w-5 h-5 text-indigo-600 mb-1.5" />
-                <div className="text-xs font-semibold text-slate-800">O&apos;qituvchi tahlili</div>
-                <div className="text-[11px] text-slate-500">To&apos;g&apos;ri / Xato / Qayta topshirish</div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* THE GLASSY ORB (HERO RIGHT) - 5 Columns on Desktop */}
-          <div className="lg:col-span-5 relative flex items-center justify-center">
-            <div className="relative w-full max-w-[580px] aspect-square flex items-center justify-center">
-              
-              {/* Glassy Orb Video with exact CSS filter & screen blending mode */}
-              <div className="relative w-full h-full flex items-center justify-center overflow-visible">
-                <video
-                  src="https://future.co/images/homepage/glassy-orb/orb-purple.webm"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="electric-blue-orb scale-125 w-full h-full object-contain pointer-events-none drop-shadow-2xl"
-                  style={{
-                    mixBlendMode: "screen",
-                    filter: "hue-rotate(-55deg) saturate(250%) brightness(1.2) contrast(1.1)",
-                  }}
-                />
-              </div>
-
-              {/* Floating Glass Badges over the orb */}
               <div
-                className="absolute -bottom-4 -left-4 md:left-4 p-4 rounded-2xl glass-panel shadow-xl flex items-center gap-3 border border-white/80 animate-fade-in"
-                style={{
-                  background: "rgba(255, 255, 255, 0.75)",
-                  backdropFilter: "blur(24px)",
-                }}
+                className="font-semibold text-black leading-none"
+                style={{ fontSize: "clamp(1.5rem, 5vw, 3.5rem)" }}
               >
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 font-bold">
-                  ✓
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Yangi yuklama tushdi</div>
-                  <div className="text-[11px] text-slate-500">Real-vaqtda SSE oqimi</div>
-                </div>
+                <span className="text-[#5E0ED7] text-[0.5em] align-top mr-0.5 font-bold">
+                  {st.plus}
+                </span>
+                {st.value}
               </div>
-
-            </div>
-          </div>
-
+              <div className="text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-black whitespace-pre-line leading-tight mt-1 text-right">
+                {st.label}
+              </div>
+            </motion.div>
+          ))}
         </div>
-      </section>
+      </main>
 
-      {/* 4. Footer Logos: "Trusted by Top-tier product companies" */}
-      <footer className="relative z-10 border-t border-slate-100 bg-white/40 py-12 px-6">
-        <div className="max-w-[1600px] mx-auto text-center space-y-6">
-          <p className="text-xs uppercase tracking-widest font-semibold text-slate-400">
-            Trusted by Top-tier product companies
-          </p>
+      {/* 4. Bottom Section (pinned to bottom with padding) */}
+      <footer className="w-full px-5 sm:px-8 md:px-12 pb-8 md:pb-12 flex flex-col gap-6 md:gap-12 z-20">
+        {/* Row A (tagline + CTA) */}
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Tagline paragraph */}
+          <motion.p
+            custom={5}
+            initial="initial"
+            animate="animate"
+            variants={fadeUp}
+            className="text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-black max-w-[130px] sm:max-w-[160px] md:max-w-xs leading-snug"
+          >
+            Shaping Bold
+            <br />
+            Visions Into Power
+            <br />
+            For Your Tribe
+          </motion.p>
 
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-[100px] opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
-            {/* 5 High-Quality Clean Grayscale Brand/Company Logos */}
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-700">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-              <span>VORTEX</span>
-            </div>
+          {/* Right: CTA Link "Work With Us" */}
+          <motion.div custom={6} initial="initial" animate="animate" variants={fadeUp}>
+            <Link
+              href="/login"
+              className="text-base sm:text-xl md:text-2xl text-[#5E0ED7] font-semibold whitespace-nowrap flex items-center gap-1 hover:opacity-85 transition-opacity"
+            >
+              <span>Work With Us</span>
+              <ArrowUpRight className="w-[18px] h-[18px] sm:w-[22px] sm:h-[22px]" />
+            </Link>
+          </motion.div>
+        </div>
 
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-700">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 6v6l4 2" stroke="white" strokeWidth="2" />
-              </svg>
-              <span>CHRONO</span>
-            </div>
+        {/* Row B (description + main heading) */}
+        <div className="flex items-end justify-between gap-3 sm:gap-4">
+          {/* Left: Fixed-width description block */}
+          <motion.div
+            custom={7}
+            initial="initial"
+            animate="animate"
+            variants={fadeUp}
+            className="w-[120px] sm:w-[180px] md:w-[280px] shrink-0"
+          >
+            <p className="text-[9px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-left md:text-right text-black leading-relaxed">
+              Creative Studios Built Around Elevating Your Vision Into Striking Reality
+            </p>
+          </motion.div>
 
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-700">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4 4h16v16H4z" />
-              </svg>
-              <span>NEXUS</span>
-            </div>
-
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-700">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </svg>
-              <span>STELLAR</span>
-            </div>
-
-            <div className="flex items-center gap-2 font-bold text-lg text-slate-700">
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm1 15h-2v-6h2zm0-8h-2V7h2z" />
-              </svg>
-              <span>APEX LABS</span>
-            </div>
+          {/* Right: Main heading with stacked words slide-up effect */}
+          <div className="flex flex-col items-end text-right">
+            {headingWords.map((word, i) => (
+              <div key={word} className="overflow-hidden leading-none">
+                <motion.h1
+                  custom={i}
+                  initial="initial"
+                  animate="animate"
+                  variants={wordSlideUp}
+                  className="font-semibold uppercase text-black text-right block"
+                  style={{
+                    fontSize: "clamp(2rem, 9vw, 9rem)",
+                    lineHeight: 0.88,
+                  }}
+                >
+                  {word}
+                </motion.h1>
+              </div>
+            ))}
           </div>
         </div>
       </footer>
-    </main>
+
+      {/* 5. Mobile Menu Overlay (Fixed, Full-screen, Z-50, White Background) */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="fixed inset-0 z-50 bg-white flex flex-col px-5 sm:px-8 pt-5 sm:pt-6 pb-8 sm:pb-12 text-black"
+          >
+            {/* Top row: Logo (left) and Close button (right) */}
+            <div className="flex items-center justify-between w-full">
+              <div className="w-[32px] h-[32px] rounded-full border-[2px] border-[#5E0ED7] flex items-center justify-center">
+                <div className="w-[10px] h-[10px] rounded-full bg-[#5E0ED7]" />
+              </div>
+
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close menu"
+                className="w-[36px] h-[36px] rounded-full bg-black flex items-center justify-center text-white hover:scale-105 transition-transform"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Middle: Vertical list of 4 nav links + Login */}
+            <div className="flex flex-col gap-8 mt-16 text-left">
+              {navItems.map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setActiveModalItem({ name: item.name, desc: item.desc });
+                  }}
+                  className="text-3xl font-semibold tracking-widest uppercase text-black hover:text-[#5E0ED7] transition-colors text-left"
+                >
+                  {item.name}
+                </button>
+              ))}
+
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-3xl font-semibold tracking-widest uppercase text-blue-600 hover:text-blue-800 transition-colors text-left flex items-center gap-2"
+              >
+                <span>Kirish (Login)</span>
+                <ArrowUpRight className="w-7 h-7" />
+              </Link>
+            </div>
+
+            {/* Bottom: Work With Us CTA */}
+            <div className="mt-auto pt-8">
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-xl text-[#5E0ED7] font-semibold tracking-widest uppercase flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <span>Work With Us</span>
+                <ArrowUpRight className="w-5 h-5" />
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 6. Information Modal for Nav Items */}
+      <AnimatePresence>
+        {activeModalItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-lg bg-white rounded-3xl p-7 sm:p-8 shadow-2xl border border-slate-200 text-black space-y-6"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-[28px] h-[28px] rounded-full border-[2px] border-[#5E0ED7] flex items-center justify-center">
+                    <div className="w-[8px] h-[8px] rounded-full bg-[#5E0ED7]" />
+                  </div>
+                  <h3 className="text-xl font-bold tracking-widest uppercase text-black">
+                    {activeModalItem.name}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setActiveModalItem(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+
+              <p className="text-sm font-medium tracking-normal normal-case leading-relaxed text-slate-700">
+                {activeModalItem.desc}
+              </p>
+
+              <div className="pt-2 flex items-center justify-between gap-3 border-t border-slate-100">
+                <button
+                  onClick={() => setActiveModalItem(null)}
+                  className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-black"
+                >
+                  Yopish
+                </button>
+                <Link
+                  href="/login"
+                  onClick={() => setActiveModalItem(null)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#5E0ED7] hover:bg-[#4d0bb5] text-white text-xs font-semibold uppercase tracking-widest transition-colors shadow-md"
+                >
+                  <span>Tizimga o&apos;tish</span>
+                  <ArrowUpRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

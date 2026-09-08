@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mars IT — Kundalik Kod Tekshirish Platformasi (NF-3043)",
+  title: "Mars IT — Kundalik Kod Tekshirish Platformasi",
   description: "IT o'quvchilari uchun kundalik kod topshiriqlari va o'qituvchi tahlili tizimi",
 };
 

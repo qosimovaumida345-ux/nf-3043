@@ -14,6 +14,12 @@ import {
   Sparkles,
   Layers,
   FolderPlus,
+  Pencil,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  X,
 } from "lucide-react";
 
 interface Group {
@@ -32,6 +38,7 @@ interface Student {
   groupName?: string | null;
   isActive: boolean;
   createdAt: string;
+  initialPassword?: string | null;
 }
 
 export default function AdminSettingsPage() {
@@ -55,6 +62,26 @@ export default function AdminSettingsPage() {
   const [submittingGroup, setSubmittingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [groupSuccess, setGroupSuccess] = useState<string | null>(null);
+
+  // Password visibility & clipboard state
+  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Edit Student Modal state
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editGroupId, setEditGroupId] = useState("");
+  const [editNewPassword, setEditNewPassword] = useState("");
+  const [savingEditStudent, setSavingEditStudent] = useState(false);
+  const [editStudentError, setEditStudentError] = useState<string | null>(null);
+
+  // Edit Group Modal state
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupDesc, setEditGroupDesc] = useState("");
+  const [savingEditGroup, setSavingEditGroup] = useState(false);
+  const [editGroupError, setEditGroupError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -92,6 +119,25 @@ export default function AdminSettingsPage() {
     setPassword(pass);
   };
 
+  const generateEditPassword = () => {
+    const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$";
+    let pass = "";
+    for (let i = 0; i < 8; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setEditNewPassword(pass);
+  };
+
+  const toggleShowPassword = (id: string) => {
+    setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const copyText = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     setStudentError(null);
@@ -127,6 +173,52 @@ export default function AdminSettingsPage() {
       setStudentError(msg);
     } finally {
       setSubmittingStudent(false);
+    }
+  };
+
+  const openEditStudent = (st: Student) => {
+    setEditingStudent(st);
+    setEditFullName(st.fullName);
+    setEditUsername(st.username);
+    setEditGroupId(st.groupId || "");
+    setEditNewPassword("");
+    setEditStudentError(null);
+  };
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    setEditStudentError(null);
+    setSavingEditStudent(true);
+
+    try {
+      const payload: Record<string, unknown> = {
+        fullName: editFullName,
+        username: editUsername,
+        groupId: editGroupId || null,
+      };
+      if (editNewPassword.trim()) {
+        payload.password = editNewPassword.trim();
+      }
+
+      const res = await fetch(`/api/admin/students/${editingStudent.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Talabani yangilashda xatolik yuz berdi.");
+      }
+
+      setEditingStudent(null);
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Xatolik yuz berdi.";
+      setEditStudentError(msg);
+    } finally {
+      setSavingEditStudent(false);
     }
   };
 
@@ -180,6 +272,44 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const openEditGroup = (grp: Group) => {
+    setEditingGroup(grp);
+    setEditGroupName(grp.name);
+    setEditGroupDesc(grp.description || "");
+    setEditGroupError(null);
+  };
+
+  const handleUpdateGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGroup) return;
+    setEditGroupError(null);
+    setSavingEditGroup(true);
+
+    try {
+      const res = await fetch(`/api/admin/groups/${editingGroup.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editGroupName,
+          description: editGroupDesc,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Guruhni yangilashda xatolik yuz berdi.");
+      }
+
+      setEditingGroup(null);
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Xatolik yuz berdi.";
+      setEditGroupError(msg);
+    } finally {
+      setSavingEditGroup(false);
+    }
+  };
+
   const handleDeleteGroup = async (id: string, name: string) => {
     if (!confirm(`Haqiqatan ham "${name}" guruhini o'chirmoqchimisiz?`)) {
       return;
@@ -204,7 +334,7 @@ export default function AdminSettingsPage() {
       <div className="absolute top-[200px] right-[-100px] w-[450px] h-[450px] rounded-full bg-[#319AFF]/15 blur-[120px] -z-10" />
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/75 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
@@ -276,7 +406,7 @@ export default function AdminSettingsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Create Student Card (5 Columns) */}
             <div className="lg:col-span-5">
-              <div className="rounded-3xl p-6 bg-white/80 backdrop-blur-2xl border border-white/80 shadow-xl space-y-5 sticky top-24">
+              <div className="rounded-3xl p-6 bg-white/85 backdrop-blur-2xl border border-white/80 shadow-xl space-y-5 sticky top-24">
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                   <UserPlus className="w-5 h-5 text-blue-600" />
                   <h3 className="font-bold text-base text-slate-900">Yangi Talaba Qo&apos;shish</h3>
@@ -366,7 +496,7 @@ export default function AdminSettingsPage() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="masalan: Mars2024!"
+                      placeholder="masalan: Mars2026!"
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all font-mono"
                     />
                   </div>
@@ -393,9 +523,14 @@ export default function AdminSettingsPage() {
             {/* Students List Table (7 Columns) */}
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-fustat font-bold text-lg text-slate-900">
-                  Mavjud Talabalar Ro&apos;yxati ({students.length})
-                </h3>
+                <div>
+                  <h3 className="font-fustat font-bold text-lg text-slate-900">
+                    Mavjud Talabalar Ro&apos;yxati ({students.length})
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Talabalarning login va parollarini istalgan payt ko&apos;rish va tahrirlash mumkin
+                  </p>
+                </div>
                 <button
                   onClick={fetchData}
                   className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-colors"
@@ -421,26 +556,93 @@ export default function AdminSettingsPage() {
                     {students.map((st) => (
                       <div
                         key={st.id}
-                        className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/60 transition-colors"
+                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 font-bold text-sm flex items-center justify-center shrink-0">
                             {st.fullName.charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-sm text-slate-900">{st.fullName}</span>
-                              {st.groupName && (
+                              {st.groupName ? (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                                   {st.groupName}
                                 </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                                  Guruhsiz
+                                </span>
                               )}
                             </div>
-                            <div className="text-xs font-mono text-slate-400">@{st.username}</div>
+
+                            {/* Credentials info row */}
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className="font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                <span className="text-slate-400">Login:</span>
+                                <strong>@{st.username}</strong>
+                                <button
+                                  type="button"
+                                  onClick={() => copyText(st.username, `user-${st.id}`)}
+                                  className="text-slate-400 hover:text-slate-700 ml-1"
+                                  title="Loginni nusxalash"
+                                >
+                                  {copiedId === `user-${st.id}` ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </span>
+
+                              {st.initialPassword ? (
+                                <span className="font-mono bg-amber-50 border border-amber-200/80 text-amber-900 px-2 py-0.5 rounded-md flex items-center gap-1.5">
+                                  <span className="text-amber-700 text-[11px] font-semibold">Parol:</span>
+                                  <span className="font-bold">
+                                    {showPassword[st.id] ? st.initialPassword : "••••••••"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleShowPassword(st.id)}
+                                    className="text-amber-700 hover:text-amber-900"
+                                    title={showPassword[st.id] ? "Yashirish" : "Parolni ko'rish"}
+                                  >
+                                    {showPassword[st.id] ? (
+                                      <EyeOff className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <Eye className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyText(st.initialPassword!, `pass-${st.id}`)}
+                                    className="text-amber-700 hover:text-amber-900"
+                                    title="Parolni nusxalash"
+                                  >
+                                    {copiedId === `pass-${st.id}` ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">
+                                  Parol shifrlangan
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                          <button
+                            onClick={() => openEditStudent(st)}
+                            className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-200"
+                            title="Talabani tahrirlash"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleDeleteStudent(st.id, st.fullName)}
                             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
@@ -463,7 +665,7 @@ export default function AdminSettingsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Create Group Form (5 Columns) */}
             <div className="lg:col-span-5">
-              <div className="rounded-3xl p-6 bg-white/80 backdrop-blur-2xl border border-white/80 shadow-xl space-y-5 sticky top-24">
+              <div className="rounded-3xl p-6 bg-white/85 backdrop-blur-2xl border border-white/80 shadow-xl space-y-5 sticky top-24">
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                   <FolderPlus className="w-5 h-5 text-blue-600" />
                   <h3 className="font-bold text-base text-slate-900">Yangi Guruh Ochish</h3>
@@ -493,7 +695,7 @@ export default function AdminSettingsPage() {
                       required
                       value={groupName}
                       onChange={(e) => setGroupName(e.target.value)}
-                      placeholder="masalan: NF-3043 yoki Frontend-101"
+                      placeholder="masalan: Frontend-101 yoki Backend-Pro"
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all"
                     />
                   </div>
@@ -550,7 +752,7 @@ export default function AdminSettingsPage() {
                   {groups.map((grp) => (
                     <div
                       key={grp.id}
-                      className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-slate-200/90 shadow-xs flex items-center justify-between"
+                      className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-slate-200/90 shadow-xs flex items-center justify-between hover:bg-slate-50/70 transition-colors"
                     >
                       <div>
                         <div className="flex items-center gap-2">
@@ -564,13 +766,22 @@ export default function AdminSettingsPage() {
                         )}
                       </div>
 
-                      <button
-                        onClick={() => handleDeleteGroup(grp.id, grp.name)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                        title="Guruhni o'chirish"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditGroup(grp)}
+                          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-200"
+                          title="Guruhni tahrirlash"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGroup(grp.id, grp.name)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                          title="Guruhni o'chirish"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -579,6 +790,191 @@ export default function AdminSettingsPage() {
           </div>
         )}
       </main>
+
+      {/* EDIT STUDENT MODAL */}
+      {editingStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-blue-600">
+                <Pencil className="w-5 h-5" />
+                <h3 className="font-bold text-base text-slate-900">Talaba ma&apos;lumotlarini tahrirlash</h3>
+              </div>
+              <button
+                onClick={() => setEditingStudent(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editStudentError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{editStudentError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateStudent} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  To&apos;liq Ismi
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Login (Username)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Guruh
+                </label>
+                <select
+                  value={editGroupId}
+                  onChange={(e) => setEditGroupId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all"
+                >
+                  <option value="">Guruhsiz</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Yangi Parol o&apos;rnatish (Ixtiyoriy)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateEditPassword}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Tasodifiy</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={editNewPassword}
+                  onChange={(e) => setEditNewPassword(e.target.value)}
+                  placeholder="Agar o'zgartirmoqchi bo'lmasangiz bo'sh qoldiring"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEditStudent}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {savingEditStudent ? "Saqlanmoqda..." : "O'zgarishlarni saqlash"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT GROUP MODAL */}
+      {editingGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-blue-600">
+                <Pencil className="w-5 h-5" />
+                <h3 className="font-bold text-base text-slate-900">Guruhni tahrirlash</h3>
+              </div>
+              <button
+                onClick={() => setEditingGroup(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editGroupError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{editGroupError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateGroup} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Guruh Nomi
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Guruh Tavsifi
+                </label>
+                <textarea
+                  rows={3}
+                  value={editGroupDesc}
+                  onChange={(e) => setEditGroupDesc(e.target.value)}
+                  placeholder="Guruh haqida ma'lumot"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingGroup(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEditGroup}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {savingEditGroup ? "Saqlanmoqda..." : "O'zgarishlarni saqlash"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
