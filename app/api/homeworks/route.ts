@@ -22,6 +22,7 @@ export async function GET() {
           title: homeworks.title,
           description: homeworks.description,
           sampleImageUrl: homeworks.sampleImageUrl,
+          sampleImageUrls: homeworks.sampleImageUrls,
           groupId: homeworks.groupId,
           groupName: groups.name,
           deadline: homeworks.deadline,
@@ -42,8 +43,21 @@ export async function GET() {
 
       const homeworksWithStats = allHomeworks.map((hw) => {
         const subsForHw = allSubs.filter((s) => s.homeworkId === hw.id);
+        let parsedUrls: string[] = [];
+        if (hw.sampleImageUrls) {
+          try {
+            parsedUrls = JSON.parse(hw.sampleImageUrls);
+          } catch {
+            parsedUrls = [];
+          }
+        }
+        if (parsedUrls.length === 0 && hw.sampleImageUrl) {
+          parsedUrls = [hw.sampleImageUrl];
+        }
+
         return {
           ...hw,
+          sampleImageUrls: parsedUrls,
           totalSubmissions: subsForHw.length,
           pendingSubmissions: subsForHw.filter((s) => s.status === "PENDING").length,
           correctSubmissions: subsForHw.filter((s) => s.status === "CORRECT").length,
@@ -70,6 +84,7 @@ export async function GET() {
           title: homeworks.title,
           description: homeworks.description,
           sampleImageUrl: homeworks.sampleImageUrl,
+          sampleImageUrls: homeworks.sampleImageUrls,
           groupId: homeworks.groupId,
           groupName: groups.name,
           deadline: homeworks.deadline,
@@ -90,6 +105,7 @@ export async function GET() {
           id: submissions.id,
           homeworkId: submissions.homeworkId,
           imageUrl: submissions.imageUrl,
+          imageUrls: submissions.imageUrls,
           status: submissions.status,
           submittedAt: submissions.submittedAt,
           comment: {
@@ -106,9 +122,39 @@ export async function GET() {
       const enrichedHomeworks = studentHomeworks.map((hw) => {
         const sub = studentSubmissions.find((s) => s.homeworkId === hw.id);
 
+        let parsedSampleUrls: string[] = [];
+        if (hw.sampleImageUrls) {
+          try {
+            parsedSampleUrls = JSON.parse(hw.sampleImageUrls);
+          } catch {
+            parsedSampleUrls = [];
+          }
+        }
+        if (parsedSampleUrls.length === 0 && hw.sampleImageUrl) {
+          parsedSampleUrls = [hw.sampleImageUrl];
+        }
+
+        let parsedSubUrls: string[] = [];
+        if (sub?.imageUrls) {
+          try {
+            parsedSubUrls = JSON.parse(sub.imageUrls);
+          } catch {
+            parsedSubUrls = [];
+          }
+        }
+        if (parsedSubUrls.length === 0 && sub?.imageUrl) {
+          parsedSubUrls = [sub.imageUrl];
+        }
+
         return {
           ...hw,
-          mySubmission: sub || null,
+          sampleImageUrls: parsedSampleUrls,
+          mySubmission: sub
+            ? {
+                ...sub,
+                imageUrls: parsedSubUrls,
+              }
+            : null,
           // Agar topshirilmagan bo'lsa yoki ustoz qayta/xato deb belgilagan bo'lsa, qayta yuklash mumkin
           canSubmit: !sub || sub.status === "RETRY" || sub.status === "INCORRECT",
           isPending: sub?.status === "PENDING",
@@ -134,7 +180,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { title, description, sampleImageUrl, groupId, deadline } = body;
+    const { title, description, sampleImageUrl, sampleImageUrls, groupId, deadline } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json(
@@ -149,11 +195,22 @@ export async function POST(request: Request) {
     const homeworkId = "hw-" + Math.random().toString(36).substring(2, 10);
     const parsedDeadline = deadline ? new Date(deadline) : null;
 
+    let finalUrls: string[] = [];
+    if (Array.isArray(sampleImageUrls) && sampleImageUrls.length > 0) {
+      finalUrls = sampleImageUrls.filter(Boolean);
+    } else if (sampleImageUrl) {
+      finalUrls = [sampleImageUrl];
+    }
+
+    const primaryImageUrl = finalUrls.length > 0 ? finalUrls[0] : null;
+    const sampleImageUrlsJson = finalUrls.length > 0 ? JSON.stringify(finalUrls) : null;
+
     await db.insert(homeworks).values({
       id: homeworkId,
       title: title.trim(),
       description: description ? description.trim() : "",
-      sampleImageUrl: sampleImageUrl || null,
+      sampleImageUrl: primaryImageUrl,
+      sampleImageUrls: sampleImageUrlsJson,
       groupId: groupId || null, // null bo'lsa barcha guruhlar uchun
       adminId: session.id,
       deadline: parsedDeadline && !isNaN(parsedDeadline.getTime()) ? parsedDeadline : null,
@@ -166,7 +223,8 @@ export async function POST(request: Request) {
         id: homeworkId,
         title: title.trim(),
         description: description ? description.trim() : "",
-        sampleImageUrl,
+        sampleImageUrl: primaryImageUrl,
+        sampleImageUrls: finalUrls,
         groupId,
         deadline: parsedDeadline,
       },

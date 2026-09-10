@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   BookOpen,
   PlusCircle,
+  Plus,
   ArrowLeft,
   UploadCloud,
   Trash2,
@@ -30,6 +31,7 @@ interface Homework {
   title: string;
   description: string;
   sampleImageUrl?: string | null;
+  sampleImageUrls?: string[] | null;
   groupId?: string | null;
   groupName?: string | null;
   deadline?: string | null;
@@ -49,8 +51,8 @@ export default function AdminHomeworksPage() {
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
-  const [sampleFile, setSampleFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [sampleFiles, setSampleFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -106,11 +108,17 @@ export default function AdminHomeworksPage() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSampleFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSampleFiles((prev) => [...prev, ...files]);
+      const newUrls = files.map((f) => URL.createObjectURL(f));
+      setPreviewUrls((prev) => [...prev, ...newUrls]);
     }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSampleFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleCreateHomework = async (e: React.FormEvent) => {
@@ -126,23 +134,27 @@ export default function AdminHomeworksPage() {
     setSubmitting(true);
 
     try {
-      let sampleImageUrl: string | null = null;
+      let sampleImageUrls: string[] = [];
 
-      // 1. Agar namuna rasm tanlangan bo'lsa, yuklaymiz
-      if (sampleFile) {
-        const formData = new FormData();
-        formData.append("file", sampleFile);
+      // 1. Agar namuna rasmlar tanlangan bo'lsa, barchasini birdaniga yuklaymiz
+      if (sampleFiles.length > 0) {
+        const uploadPromises = sampleFiles.map(async (file) => {
+          const formData = new FormData();
+          formData.append("file", file);
 
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) {
+            throw new Error(uploadData.error || `${file.name} rasmini yuklashda xatolik.`);
+          }
+          return uploadData.url as string;
         });
 
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) {
-          throw new Error(uploadData.error || "Namuna rasmni yuklashda xatolik.");
-        }
-        sampleImageUrl = uploadData.url;
+        sampleImageUrls = await Promise.all(uploadPromises);
       }
 
       // 2. Uy ishini saqlash
@@ -152,7 +164,8 @@ export default function AdminHomeworksPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
-          sampleImageUrl,
+          sampleImageUrl: sampleImageUrls[0] || null,
+          sampleImageUrls,
           groupId: selectedGroup || null,
           deadline: deadline ? new Date(deadline).toISOString() : null,
         }),
@@ -169,8 +182,8 @@ export default function AdminHomeworksPage() {
       setDescription("");
       setDeadline("");
       setSelectedGroup("");
-      setSampleFile(null);
-      setPreviewUrl(null);
+      setSampleFiles([]);
+      setPreviewUrls([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
       await fetchHomeworksAndGroups();
@@ -371,50 +384,97 @@ export default function AdminHomeworksPage() {
 
                 {/* Sample Image upload */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Namuna / Shart Rasmi (Ustoz kodi yoki topshiriq surati)
-                  </label>
-
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
-                      previewUrl ? "border-blue-400 bg-blue-50/20" : "border-slate-300 hover:border-blue-500"
-                    }`}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,.heic,.heif,.webp,.png,.jpg,.jpeg,.gif,.bmp,.svg,.avif"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-
-                    {previewUrl ? (
-                      <div className="space-y-2">
-                        <div className="relative w-full h-44 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 flex items-center justify-center p-1">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={previewUrl}
-                            alt="Sample preview"
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                        <p className="text-xs text-blue-600 font-medium">
-                          Namuna rasmni o&apos;zgartirish uchun bosing
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center space-y-1.5 py-3">
-                        <UploadCloud className="w-8 h-8 text-blue-600 mb-1" />
-                        <span className="text-xs font-semibold text-slate-700">
-                          Namuna rasm yuklash (ixtiyoriy)
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          Skrinshot, daftar yoki kod namunasi fotosi (PNG, JPG, WEBP va barcha formatlar)
-                        </span>
-                      </div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Namuna / Shart Rasmlari (1 ta yoki bir nechta rasm)
+                    </label>
+                    {previewUrls.length > 0 && (
+                      <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                        {previewUrls.length} ta rasm tanlandi
+                      </span>
                     )}
                   </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,.heic,.heif,.webp,.png,.jpg,.jpeg,.gif,.bmp,.svg,.avif"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+
+                  {previewUrls.length > 0 ? (
+                    <div className="space-y-3 p-3 bg-slate-50/80 border border-slate-200 rounded-2xl">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {previewUrls.map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="relative group h-28 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 flex items-center justify-center p-1"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`Preview ${idx + 1}`}
+                              className="w-full h-full object-contain"
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFile(idx);
+                              }}
+                              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-md transition-transform hover:scale-110"
+                              title="O'chirish"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Yana rasm qo&apos;shish</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSampleFiles([]);
+                            setPreviewUrls([]);
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }}
+                          className="text-xs text-rose-500 hover:text-rose-600 cursor-pointer"
+                        >
+                          Barchasini tozalash
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-5 text-center cursor-pointer transition-all bg-white/50 hover:bg-blue-50/20"
+                    >
+                      <div className="flex flex-col items-center justify-center space-y-1.5">
+                        <UploadCloud className="w-8 h-8 text-blue-600 mb-1" />
+                        <span className="text-xs font-semibold text-slate-800">
+                          Namuna rasmlarni tanlash (1 ta yoki bir nechta)
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          Bir vaqtda bir nechta rasm belgilashingiz mumkin (PNG, JPG, WEBP va barcha formatlar)
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Submit button */}
@@ -525,28 +585,42 @@ export default function AdminHomeworksPage() {
                         </div>
                       </div>
 
-                      {hw.sampleImageUrl && (
-                        <div className="sm:col-span-4">
-                          <div
-                            onClick={() => setZoomedImage(hw.sampleImageUrl!)}
-                            className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={hw.sampleImageUrl}
-                              alt="Sample image"
-                              className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                            />
-                            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-semibold gap-1">
-                              <Maximize2 className="w-3.5 h-3.5" />
-                              <span>Ko&apos;rish</span>
+                      {((hw.sampleImageUrls && hw.sampleImageUrls.length > 0) || hw.sampleImageUrl) && (() => {
+                        const images = (hw.sampleImageUrls && hw.sampleImageUrls.length > 0)
+                          ? hw.sampleImageUrls
+                          : (hw.sampleImageUrl ? [hw.sampleImageUrl] : []);
+
+                        return (
+                          <div className="sm:col-span-5 space-y-2">
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                              <span>Ustoz Namunalari:</span>
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold">
+                                {images.length} ta rasm
+                              </span>
+                            </div>
+                            <div className={`grid ${images.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"} gap-2`}>
+                              {images.map((imgUrl, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  onClick={() => setZoomedImage(imgUrl)}
+                                  className="relative h-24 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imgUrl}
+                                    alt={`Sample ${imgIdx + 1}`}
+                                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold gap-1 rounded-xl">
+                                    <Maximize2 className="w-3 h-3" />
+                                    <span>#{imgIdx + 1}</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                          <div className="text-[10px] text-slate-400 text-center mt-1">
-                            Ustoz namunasi
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}

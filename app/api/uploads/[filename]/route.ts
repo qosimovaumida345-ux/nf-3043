@@ -1,20 +1,4 @@
-import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-
-const MIME_TYPES: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".svg": "image/svg+xml",
-  ".bmp": "image/bmp",
-  ".avif": "image/avif",
-  ".heic": "image/heic",
-  ".heif": "image/heif",
-  ".jfif": "image/jpeg",
-};
+import { getUploadedFile } from "@/lib/storage";
 
 export async function GET(
   request: Request,
@@ -22,23 +6,20 @@ export async function GET(
 ) {
   try {
     const { filename } = await context.params;
+    const fileData = await getUploadedFile(filename);
 
-    // Path traversal oldini olish
-    const safeName = path.basename(filename);
-    const filePath = path.join(process.cwd(), "public", "uploads", safeName);
+    if (!fileData) {
+      return new Response("Rasm topilmadi", { status: 404 });
+    }
 
-    const fileBuffer = await fs.readFile(filePath);
-    const ext = path.extname(safeName).toLowerCase();
-    const contentType = MIME_TYPES[ext] || "application/octet-stream";
-
-    return new Response(fileBuffer, {
+    return new Response(fileData.buffer as unknown as BodyInit, {
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": fileData.contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
   } catch (err) {
-    console.error("Faylni o'qishda xatolik:", err);
+    console.error("API orqali faylni o'qishda xatolik:", err);
     return new Response("Rasm topilmadi", { status: 404 });
   }
 }

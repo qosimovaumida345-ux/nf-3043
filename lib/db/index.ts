@@ -106,6 +106,12 @@ export async function ensureDatabaseReady() {
       console.warn("homeworks.description migration notice:", e);
     }
 
+    try {
+      await sql`ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS sample_image_urls TEXT`;
+    } catch (e) {
+      console.warn("homeworks.sample_image_urls migration notice:", e);
+    }
+
     // 4. submissions jadvali
     await sql`
       CREATE TABLE IF NOT EXISTS submissions (
@@ -120,12 +126,29 @@ export async function ensureDatabaseReady() {
       );
     `;
 
-    // submissions jadvaliga homework_id qo'shish (agar mavjud bo'lmasa)
+    // submissions jadvaliga homework_id va image_urls qo'shish (agar mavjud bo'lmasa)
     try {
       await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS homework_id TEXT REFERENCES homeworks(id) ON DELETE CASCADE`;
     } catch (e) {
       console.warn("submissions.homework_id migration notice:", e);
     }
+
+    try {
+      await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS image_urls TEXT`;
+    } catch (e) {
+      console.warn("submissions.image_urls migration notice:", e);
+    }
+
+    // uploaded_files jadvali (Doimiy PostgreSQL rasm ombori - git yoki konteynerga bog'liq emas!)
+    await sql`
+      CREATE TABLE IF NOT EXISTS uploaded_files (
+        id TEXT PRIMARY KEY,
+        file_name TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        data TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
 
     // 5. review_comments jadvali
     await sql`

@@ -25,6 +25,7 @@ export const homeworks = pgTable("homeworks", {
   title: text("title").notNull(),
   description: text("description").default(""),
   sampleImageUrl: text("sample_image_url"),
+  sampleImageUrls: text("sample_image_urls"), // JSON array of string URLs
   groupId: text("group_id").references(() => groups.id, { onDelete: "cascade" }), // null bo'lsa barcha guruhlar uchun
   adminId: text("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   deadline: timestamp("deadline", { withTimezone: true }),
@@ -37,6 +38,7 @@ export const submissions = pgTable("submissions", {
   studentId: text("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   homeworkId: text("homework_id").references(() => homeworks.id, { onDelete: "cascade" }),
   imageUrl: text("image_url").notNull(),
+  imageUrls: text("image_urls"), // JSON array of string URLs
   storageKey: text("storage_key"),
   taskTitle: text("task_title").default("Kundalik kod topshirig'i"),
   status: varchar("status", { length: 20 }).notNull().default("PENDING"), // 'PENDING' | 'CORRECT' | 'INCORRECT' | 'RETRY'
@@ -71,6 +73,14 @@ export const groupMessages = pgTable("group_messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const uploadedFiles = pgTable("uploaded_files", {
+  id: text("id").primaryKey(),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  data: text("data").notNull(), // base64 encoded string for maximum reliability and portability
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Group = typeof groups.$inferSelect;
 export type NewGroup = typeof groups.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -84,3 +94,6 @@ export type NewReviewComment = typeof reviewComments.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type GroupMessage = typeof groupMessages.$inferSelect;
 export type NewGroupMessage = typeof groupMessages.$inferInsert;
+export type UploadedFile = typeof uploadedFiles.$inferSelect;
+export type NewUploadedFile = typeof uploadedFiles.$inferInsert;
+

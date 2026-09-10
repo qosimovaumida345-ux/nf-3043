@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb, ensureDatabaseReady } from "@/lib/db";
 import { submissions, reviewComments, users, notifications, homeworks, groups } from "@/lib/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, isNull } from "drizzle-orm";
 import { notificationEmitter } from "@/lib/events";
 
 export async function GET(request: Request) {
@@ -23,6 +23,7 @@ export async function GET(request: Request) {
           homeworkId: submissions.homeworkId,
           homeworkTitle: homeworks.title,
           imageUrl: submissions.imageUrl,
+          imageUrls: submissions.imageUrls,
           taskTitle: submissions.taskTitle,
           status: submissions.status,
           submittedAt: submissions.submittedAt,
@@ -39,7 +40,25 @@ export async function GET(request: Request) {
         .where(eq(submissions.studentId, session.id))
         .orderBy(desc(submissions.submittedAt));
 
-      return NextResponse.json({ submissions: studentSubmissions });
+      const enriched = studentSubmissions.map((s) => {
+        let parsedUrls: string[] = [];
+        if (s.imageUrls) {
+          try {
+            parsedUrls = JSON.parse(s.imageUrls);
+          } catch {
+            parsedUrls = [];
+          }
+        }
+        if (parsedUrls.length === 0 && s.imageUrl) {
+          parsedUrls = [s.imageUrl];
+        }
+        return {
+          ...s,
+          imageUrls: parsedUrls,
+        };
+      });
+
+      return NextResponse.json({ submissions: enriched });
     }
 
     // 2. ADMIN OQIMI: Barcha talabalarning barcha yuklamalari
@@ -60,6 +79,7 @@ export async function GET(request: Request) {
           studentGroupId: users.groupId,
           studentGroupName: groups.name,
           imageUrl: submissions.imageUrl,
+          imageUrls: submissions.imageUrls,
           taskTitle: submissions.taskTitle,
           status: submissions.status,
           submittedAt: submissions.submittedAt,
@@ -90,7 +110,25 @@ export async function GET(request: Request) {
         filtered = filtered.filter((s) => s.status === statusFilter);
       }
 
-      return NextResponse.json({ submissions: filtered });
+      const enriched = filtered.map((s) => {
+        let parsedUrls: string[] = [];
+        if (s.imageUrls) {
+          try {
+            parsedUrls = JSON.parse(s.imageUrls);
+          } catch {
+            parsedUrls = [];
+          }
+        }
+        if (parsedUrls.length === 0 && s.imageUrl) {
+          parsedUrls = [s.imageUrl];
+        }
+        return {
+          ...s,
+          imageUrls: parsedUrls,
+        };
+      });
+
+      return NextResponse.json({ submissions: enriched });
     }
 
     return NextResponse.json({ error: "Noto'g'ri rol." }, { status: 403 });
@@ -112,11 +150,21 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { homeworkId, imageUrl, storageKey, taskTitle } = body;
+    const { homeworkId, imageUrl, imageUrls, storageKey, taskTitle } = body;
 
-    if (!imageUrl) {
-      return NextResponse.json({ error: "Rasm manzili majburiy." }, { status: 400 });
+    let finalUrls: string[] = [];
+    if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+      finalUrls = imageUrls.filter(Boolean);
+    } else if (imageUrl) {
+      finalUrls = [imageUrl];
     }
+
+    if (finalUrls.length === 0) {
+      return NextResponse.json({ error: "Kamida 1 ta rasm yuklanishi shart." }, { status: 400 });
+    }
+
+    const primaryImageUrl = finalUrls[0];
+    const imageUrlsJson = JSON.stringify(finalUrls);
 
     await ensureDatabaseReady();
     const db = getDb();
@@ -137,12 +185,12 @@ export async function POST(request: Request) {
       if (existing.length > 0) {
         const prev = existing[0];
 
-        // 1. Agar hali tekshirilmagan (PENDING) bo'lsa - qayta yuborishni bloklaymiz!
+        // 1. Agar hali tekshirilmagan (PENDING) bo'lsa - qayta yuborish qat'iy bloklanadi!
         if (prev.status === "PENDING") {
           return NextResponse.json(
             {
               error:
-                "Siz ushbu uy ishini allaqachon topshirgansiz. O'qituvchi tekshirib natijani e'lon qilmaguncha qayta yubora olmaysiz!",
+                "Siz ushbu uy ishini allaqachon topshirgansiz. O'qituvchi tekshirib natijani e'lon qilmaguncha qayta topshira olmaysiz!",
             },
             { status: 400 }
           );
@@ -161,7 +209,8 @@ export async function POST(request: Request) {
         await db
           .update(submissions)
           .set({
-            imageUrl,
+            imageUrl: primaryImageUrl,
+            imageUrls: imageUrlsJson,
             storageKey: storageKey || null,
             taskTitle: taskTitle || prev.taskTitle,
             status: "PENDING",
@@ -176,19 +225,44 @@ export async function POST(request: Request) {
           studentName: session.fullName,
           taskTitle: taskTitle || prev.taskTitle || "Uy ishi (Qayta topshirildi)",
           submittedAt: now.toISOString(),
-          imageUrl,
+          imageUrl: primaryImageUrl,
+          imageUrls: finalUrls,
         });
 
         return NextResponse.json({
           success: true,
           submission: {
             id: prev.id,
-            imageUrl,
+            imageUrl: primaryImageUrl,
+            imageUrls: finalUrls,
             taskTitle: taskTitle || prev.taskTitle,
             status: "PENDING",
             submittedAt: now.toISOString(),
           },
         });
+      }
+    } else {
+      // Umumiy topshiriq topshirayotganda ham avvalgi tekshirilmagan topshiriq bormi yo'qmi tekshiramiz
+      const existingGeneral = await db
+        .select()
+        .from(submissions)
+        .where(
+          and(
+            eq(submissions.studentId, session.id),
+            isNull(submissions.homeworkId),
+            eq(submissions.status, "PENDING")
+          )
+        )
+        .limit(1);
+
+      if (existingGeneral.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Avvalgi topshirig'ingiz o'qituvchi tomonidan tekshirilmoqda. Natija chiqmaguncha qayta yubora olmaysiz!",
+          },
+          { status: 400 }
+        );
       }
     }
 
@@ -200,7 +274,8 @@ export async function POST(request: Request) {
       id: submissionId,
       studentId: session.id,
       homeworkId: homeworkId || null,
-      imageUrl,
+      imageUrl: primaryImageUrl,
+      imageUrls: imageUrlsJson,
       storageKey: storageKey || null,
       taskTitle: taskTitle || "Uy ishi topshirig'i",
       status: "PENDING",
@@ -231,14 +306,16 @@ export async function POST(request: Request) {
       studentName: session.fullName,
       taskTitle: taskTitle || "Uy ishi topshirig'i",
       submittedAt: now.toISOString(),
-      imageUrl,
+      imageUrl: primaryImageUrl,
+      imageUrls: finalUrls,
     });
 
     return NextResponse.json({
       success: true,
       submission: {
         id: submissionId,
-        imageUrl,
+        imageUrl: primaryImageUrl,
+        imageUrls: finalUrls,
         taskTitle,
         status: "PENDING",
         submittedAt: now.toISOString(),

@@ -24,6 +24,7 @@ import {
   Users,
   Volume2,
   BellRing,
+  Plus,
 } from "lucide-react";
 import { playNotificationSound, playSuccessSound, playWarningSound } from "@/lib/sound";
 
@@ -38,6 +39,7 @@ interface StudentSubmission {
   id: string;
   homeworkId?: string | null;
   imageUrl: string;
+  imageUrls?: string[] | null;
   status: "PENDING" | "CORRECT" | "INCORRECT" | "RETRY";
   submittedAt: string;
   comment?: Comment | null;
@@ -48,6 +50,7 @@ interface Homework {
   title: string;
   description: string;
   sampleImageUrl?: string | null;
+  sampleImageUrls?: string[] | null;
   groupName?: string | null;
   deadline?: string | null;
   createdAt: string;
@@ -83,10 +86,10 @@ export default function StudentDashboardPage() {
   const [homeworks, setHomeworks] = useState<Homework[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active submission drawer/state: [homeworkId]: { file, previewUrl, uploading, error, success }
+  // Active submission drawer/state: [homeworkId]: { files, previewUrls, uploading, error, success }
   const [activeUploadHwId, setActiveUploadHwId] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
@@ -259,46 +262,67 @@ export default function StudentDashboardPage() {
 
   const handleOpenUpload = (hwId: string) => {
     setActiveUploadHwId(hwId);
-    setSelectedFile(null);
-    setPreviewUrl(null);
+    setSelectedFiles([]);
+    setPreviewUrls([]);
     setUploadError(null);
     setUploadSuccess(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...files]);
+      const newUrls = files.map((f) => URL.createObjectURL(f));
+      setPreviewUrls((prev) => [...prev, ...newUrls]);
       setUploadError(null);
       setUploadSuccess(null);
     }
   };
 
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleUploadSubmit = async (hwId: string, hwTitle: string) => {
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       setUploadError("Iltimos, avval kodingiz suratini tanlang.");
       return;
     }
 
+    // Double-submit qat'iy bloklash
+    if (uploading) return;
+
     setUploading(true);
     setUploadError(null);
 
-    try {
-      // 1. Rasmni yuklash
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+    // Darhol shu uy ishini lokal holatda topshirilgan (qulflangan) deb belgilaymiz
+    setHomeworks((prev) =>
+      prev.map((h) =>
+        h.id === hwId ? { ...h, canSubmit: false, isPending: true } : h
+      )
+    );
 
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+    try {
+      // 1. Tanlangan barcha rasmlarni yuklash
+      const uploadPromises = selectedFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          throw new Error(uploadData.error || `${file.name} rasmini yuklashda xatolik.`);
+        }
+        return uploadData.url as string;
       });
 
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadData.error || "Rasm yuklash muvaffaqiyatsiz bo'ldi.");
-      }
+      const imageUrls = await Promise.all(uploadPromises);
 
       // 2. Topshiriqni bog'lab saqlash
       const subRes = await fetch("/api/submissions", {
@@ -306,8 +330,8 @@ export default function StudentDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           homeworkId: hwId,
-          imageUrl: uploadData.url,
-          storageKey: uploadData.storageKey,
+          imageUrl: imageUrls[0],
+          imageUrls,
           taskTitle: hwTitle,
         }),
       });
@@ -319,8 +343,8 @@ export default function StudentDashboardPage() {
 
       setUploadSuccess("✅ Topshiriq muvaffaqiyatli topshirildi va ustozga yuborildi!");
       playSuccessSound();
-      setSelectedFile(null);
-      setPreviewUrl(null);
+      setSelectedFiles([]);
+      setPreviewUrls([]);
       setActiveUploadHwId(null);
 
       await fetchSessionAndHomeworks();
@@ -328,6 +352,8 @@ export default function StudentDashboardPage() {
       const msg = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       setUploadError(msg);
       playWarningSound();
+      // Xatolik yuz berganda qayta urinish imkoni beriladi
+      await fetchSessionAndHomeworks();
     } finally {
       setUploading(false);
     }
@@ -660,7 +686,7 @@ export default function StudentDashboardPage() {
 
                     {/* Content Section: Ustoz tavsifi va Ustoz namunasi */}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start bg-slate-50/70 p-5 rounded-2xl border border-slate-200/60">
-                      <div className={`${hw.sampleImageUrl ? "md:col-span-8" : "md:col-span-12"} space-y-2`}>
+                      <div className={`${(hw.sampleImageUrls?.length || hw.sampleImageUrl) ? "md:col-span-8" : "md:col-span-12"} space-y-2`}>
                         <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                           Ustoz Ko&apos;rsatmasi va Topshiriq Sharti:
                         </div>
@@ -669,68 +695,93 @@ export default function StudentDashboardPage() {
                         </p>
                       </div>
 
-                      {hw.sampleImageUrl && (
-                        <div className="md:col-span-4">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                            Ustoz Namunasi (Rasm):
-                          </div>
-                          <div
-                            onClick={() => setZoomedImage(hw.sampleImageUrl!)}
-                            className="relative w-full h-40 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center shadow-xs p-1"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={hw.sampleImageUrl}
-                              alt="Teacher sample"
-                              className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                            />
-                            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1">
-                              <Maximize2 className="w-4 h-4" />
-                              <span>Namunani ko&apos;rish</span>
+                      {((hw.sampleImageUrls && hw.sampleImageUrls.length > 0) || hw.sampleImageUrl) && (() => {
+                        const sampleImages = (hw.sampleImageUrls && hw.sampleImageUrls.length > 0)
+                          ? hw.sampleImageUrls
+                          : (hw.sampleImageUrl ? [hw.sampleImageUrl] : []);
+
+                        return (
+                          <div className="md:col-span-4 space-y-2">
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                              <span>Ustoz Namunasi:</span>
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold">
+                                {sampleImages.length} ta rasm
+                              </span>
+                            </div>
+                            <div className={`grid ${sampleImages.length === 1 ? "grid-cols-1" : "grid-cols-2"} gap-2`}>
+                              {sampleImages.map((imgUrl, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  onClick={() => setZoomedImage(imgUrl)}
+                                  className="relative h-28 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center shadow-xs p-1"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imgUrl}
+                                    alt={`Teacher sample ${imgIdx + 1}`}
+                                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 rounded-xl">
+                                    <Maximize2 className="w-3.5 h-3.5" />
+                                    <span>#{imgIdx + 1}</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
 
                     {/* SUBMISSION STATE & INTERACTION */}
                     <div className="space-y-4 pt-2">
                       {/* Case 1: Talaba allaqachon topshirgan va o'qituvchi tekshiruvida (PENDING) */}
-                      {sub && sub.status === "PENDING" && (
-                        <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                              <Lock className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <h5 className="font-bold text-xs sm:text-sm text-amber-900">
-                                Topshiriq yuborilgan — O&apos;qituvchi tekshiruvida!
-                              </h5>
-                              <p className="text-xs text-amber-700 mt-0.5">
-                                Ustoz tekshirib baho yoki izoh e&apos;lon qilmaguncha qayta rasm yubora olmaysiz.
-                              </p>
-                              <div className="text-[11px] text-amber-600/80 mt-1">
-                                Yuborilgan vaqt: {new Date(sub.submittedAt).toLocaleString("uz-UZ")}
+                      {sub && sub.status === "PENDING" && (() => {
+                        const subImages = (sub.imageUrls && sub.imageUrls.length > 0)
+                          ? sub.imageUrls
+                          : (sub.imageUrl ? [sub.imageUrl] : []);
+
+                        return (
+                          <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                                <Lock className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <h5 className="font-bold text-xs sm:text-sm text-amber-900">
+                                  Topshiriq yuborilgan — O&apos;qituvchi tekshiruvida!
+                                </h5>
+                                <p className="text-xs text-amber-700 mt-0.5">
+                                  Ustoz tekshirib baho yoki izoh e&apos;lon qilmaguncha qayta rasm yubora olmaysiz.
+                                </p>
+                                <div className="text-[11px] text-amber-600/80 mt-1">
+                                  Yuborilgan vaqt: {new Date(sub.submittedAt).toLocaleString("uz-UZ")} • {subImages.length} ta rasm topshirilgan
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          <div
-                            onClick={() => setZoomedImage(sub.imageUrl)}
-                            className="relative w-24 h-16 rounded-xl overflow-hidden border border-amber-300 cursor-pointer shrink-0 bg-slate-900/10 flex items-center justify-center p-1"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={sub.imageUrl}
-                              alt="My submission"
-                              className="w-full h-full object-contain"
-                            />
-                            <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity rounded-xl">
-                              Ko&apos;rish
+                            <div className="flex flex-wrap gap-2 shrink-0">
+                              {subImages.map((imgUrl, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  onClick={() => setZoomedImage(imgUrl)}
+                                  className="relative w-20 h-14 rounded-xl overflow-hidden border border-amber-300 cursor-pointer shrink-0 bg-slate-900/10 flex items-center justify-center p-1"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imgUrl}
+                                    alt={`My submission ${imgIdx + 1}`}
+                                    className="w-full h-full object-contain"
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity rounded-xl">
+                                    #{imgIdx + 1}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Case 2: To'g'ri qabul qilingan (CORRECT) */}
                       {sub && sub.status === "CORRECT" && (
@@ -826,45 +877,98 @@ export default function StudentDashboardPage() {
                             </div>
                           )}
 
-                          <div
-                            onClick={() => fileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all bg-white ${
-                              previewUrl ? "border-blue-400" : "border-slate-300 hover:border-blue-500"
-                            }`}
-                          >
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700">
+                                Kod Fotosuratlari (1 ta yoki bir nechta rasm)
+                              </label>
+                              {previewUrls.length > 0 && (
+                                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                  {previewUrls.length} ta rasm tanlandi
+                                </span>
+                              )}
+                            </div>
+
                             <input
                               ref={fileInputRef}
                               type="file"
+                              multiple
                               accept="image/*,.heic,.heif,.webp,.png,.jpg,.jpeg,.gif,.bmp,.svg,.avif"
                               onChange={handleFileChange}
                               className="hidden"
                             />
 
-                            {previewUrl ? (
-                              <div className="space-y-3">
-                                <div className="relative w-full h-56 rounded-xl overflow-hidden bg-slate-950/5 border border-slate-200 flex items-center justify-center p-2">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={previewUrl}
-                                    alt="Selected preview"
-                                    className="max-h-52 w-auto object-contain rounded-lg shadow-xs"
-                                  />
+                            {previewUrls.length > 0 ? (
+                              <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-2xl">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                  {previewUrls.map((url, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="relative group h-28 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 flex items-center justify-center p-1"
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={url}
+                                        alt={`Selected preview ${idx + 1}`}
+                                        className="w-full h-full object-contain"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemoveFile(idx);
+                                        }}
+                                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-md transition-transform hover:scale-110"
+                                        title="O'chirish"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                      <span className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                        #{idx + 1}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
-                                <p className="text-xs text-blue-600 font-medium">
-                                  Boshqa rasm tanlash uchun bosing
-                                </p>
+
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Yana rasm qo&apos;shish</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedFiles([]);
+                                      setPreviewUrls([]);
+                                      if (fileInputRef.current) fileInputRef.current.value = "";
+                                    }}
+                                    className="text-xs text-rose-500 hover:text-rose-600 cursor-pointer"
+                                  >
+                                    Barchasini tozalash
+                                  </button>
+                                </div>
                               </div>
                             ) : (
-                              <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
-                                  <UploadCloud className="w-6 h-6" />
+                              <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer transition-all bg-white"
+                              >
+                                <div className="flex flex-col items-center justify-center space-y-2 py-3">
+                                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
+                                    <UploadCloud className="w-6 h-6" />
+                                  </div>
+                                  <div className="text-xs font-semibold text-slate-800">
+                                    Kod suratlarini tanlash uchun bosing (1 ta yoki bir nechta)
+                                  </div>
+                                  <p className="text-[11px] text-slate-400">
+                                    Kompyuter ekrani yoki daftardagi kod suratlari (PNG, JPG, WEBP, HEIC)
+                                  </p>
                                 </div>
-                                <div className="text-xs font-semibold text-slate-800">
-                                  Kod suratini tanlash uchun bosing
-                                </div>
-                                <p className="text-[11px] text-slate-400">
-                                  Kompyuter ekrani yoki daftardagi kod surati (PNG, JPG, WEBP, HEIC)
-                                </p>
                               </div>
                             )}
                           </div>
@@ -879,9 +983,9 @@ export default function StudentDashboardPage() {
                             </button>
                             <button
                               type="button"
-                              disabled={uploading || !selectedFile}
+                              disabled={uploading || selectedFiles.length === 0}
                               onClick={() => handleUploadSubmit(hw.id, hw.title)}
-                              className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                              className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                             >
                               {uploading ? (
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

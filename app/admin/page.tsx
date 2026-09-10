@@ -31,6 +31,7 @@ interface Submission {
   studentName: string;
   studentUsername: string;
   imageUrl: string;
+  imageUrls?: string[] | null;
   taskTitle: string;
   status: "PENDING" | "CORRECT" | "INCORRECT" | "RETRY";
   submittedAt: string;
@@ -594,22 +595,63 @@ export default function AdminDashboardPage() {
                   {/* Body: Left = Image, Right = Feedback Form */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     {/* Left: Code Photo Thumbnail */}
-                    <div className="lg:col-span-5">
-                      <div
-                        onClick={() => setZoomedImage(sub.imageUrl)}
-                        className="relative w-full h-64 sm:h-72 rounded-2xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={sub.imageUrl}
-                          alt="Code photo"
-                          className="w-full h-full object-contain bg-slate-950/5 group-hover:scale-102 transition-transform duration-200"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5">
-                          <Maximize2 className="w-5 h-5" />
-                          <span>To&apos;liq ekranda ko&apos;rish</span>
-                        </div>
-                      </div>
+                    <div className="lg:col-span-5 space-y-2">
+                      {(() => {
+                        const images = (sub.imageUrls && sub.imageUrls.length > 0)
+                          ? sub.imageUrls
+                          : (sub.imageUrl ? [sub.imageUrl] : []);
+
+                        if (images.length === 1) {
+                          return (
+                            <div
+                              onClick={() => setZoomedImage(images[0])}
+                              className="relative w-full h-64 sm:h-72 rounded-2xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={images[0]}
+                                alt="Code photo"
+                                className="w-full h-full object-contain bg-slate-950/5 group-hover:scale-102 transition-transform duration-200"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 rounded-2xl">
+                                <Maximize2 className="w-5 h-5" />
+                                <span>To&apos;liq ekranda ko&apos;rish</span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-600 px-1">
+                              <span>Talaba topshirgan kod suratlari:</span>
+                              <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                {images.length} ta rasm
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {images.map((imgUrl, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  onClick={() => setZoomedImage(imgUrl)}
+                                  className="relative h-36 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imgUrl}
+                                    alt={`Code part ${imgIdx + 1}`}
+                                    className="w-full h-full object-contain bg-slate-950/5 group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 rounded-xl">
+                                    <Maximize2 className="w-4 h-4" />
+                                    <span>#{imgIdx + 1}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Right: Review & Verdict Form */}
