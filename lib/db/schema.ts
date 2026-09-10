@@ -23,10 +23,11 @@ export const users = pgTable("users", {
 export const homeworks = pgTable("homeworks", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
-  description: text("description").notNull(),
+  description: text("description").default(""),
   sampleImageUrl: text("sample_image_url"),
   groupId: text("group_id").references(() => groups.id, { onDelete: "cascade" }), // null bo'lsa barcha guruhlar uchun
   adminId: text("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  deadline: timestamp("deadline", { withTimezone: true }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -47,7 +48,7 @@ export const reviewComments = pgTable("review_comments", {
   id: text("id").primaryKey(),
   submissionId: text("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
   adminId: text("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  feedbackText: text("feedback_text").notNull(),
+  feedbackText: text("feedback_text").default(""),
   verdict: varchar("verdict", { length: 20 }).notNull().default("CORRECT"), // 'CORRECT' | 'INCORRECT' | 'RETRY'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

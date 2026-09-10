@@ -22,7 +22,10 @@ import {
   MessageSquare,
   Send,
   Users,
+  Volume2,
+  BellRing,
 } from "lucide-react";
+import { playNotificationSound, playSuccessSound, playWarningSound } from "@/lib/sound";
 
 interface Comment {
   id: string;
@@ -46,6 +49,7 @@ interface Homework {
   description: string;
   sampleImageUrl?: string | null;
   groupName?: string | null;
+  deadline?: string | null;
   createdAt: string;
   mySubmission?: StudentSubmission | null;
   canSubmit: boolean;
@@ -98,9 +102,18 @@ export default function StudentDashboardPage() {
   const [chatText, setChatText] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const lastMsgCountRef = useRef(0);
 
   useEffect(() => {
     fetchSessionAndHomeworks();
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        fetchSessionAndHomeworks();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
   // Guruh xabarlarini avtomatik yangilab turish (har 3 soniyada)
@@ -115,7 +128,13 @@ export default function StudentDashboardPage() {
         if (res.ok) {
           const data = await res.json();
           if (isMounted) {
-            setChatMessages(data.messages || []);
+            const msgs: ChatMessage[] = data.messages || [];
+            if (silent && msgs.length > lastMsgCountRef.current) {
+              // Yangi xabar kelganda bildirishnoma ovozi
+              playNotificationSound();
+            }
+            lastMsgCountRef.current = msgs.length;
+            setChatMessages(msgs);
           }
         }
       } catch (err) {
@@ -156,6 +175,7 @@ export default function StudentDashboardPage() {
         const data = await res.json();
         setChatMessages((prev) => [...prev, data.message]);
         setChatText("");
+        playSuccessSound();
         setTimeout(() => {
           chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
         }, 80);
@@ -173,15 +193,19 @@ export default function StudentDashboardPage() {
     try {
       setLoading(true);
       const [meRes, hwRes] = await Promise.all([
-        fetch("/api/auth/me"),
-        fetch("/api/homeworks"),
+        fetch("/api/auth/me", { cache: "no-store" }),
+        fetch("/api/homeworks", { cache: "no-store" }),
       ]);
 
       if (!meRes.ok) {
-        router.push("/login");
+        window.location.replace("/login");
         return;
       }
       const meData = await meRes.json();
+      if (meData.user?.role === "ADMIN") {
+        window.location.replace("/admin");
+        return;
+      }
       setUser(meData.user);
 
       if (hwRes.ok) {
@@ -193,6 +217,44 @@ export default function StudentDashboardPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getDeadlineInfo = (deadlineStr?: string | null) => {
+    if (!deadlineStr) return null;
+    const now = new Date();
+    const d = new Date(deadlineStr);
+    if (isNaN(d.getTime())) return null;
+
+    const diffMs = d.getTime() - now.getTime();
+    const isExpired = diffMs <= 0;
+    const hoursLeft = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+    const daysLeft = Math.floor(hoursLeft / 24);
+
+    let statusText = "";
+    if (isExpired) {
+      statusText = "Muddati o'tgan";
+    } else if (daysLeft > 0) {
+      statusText = `${daysLeft} kun qoldi`;
+    } else if (hoursLeft > 0) {
+      statusText = `${hoursLeft} soat qoldi`;
+    } else {
+      const minutesLeft = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+      statusText = `${minutesLeft} daqiqa qoldi`;
+    }
+
+    const formattedDate = d.toLocaleString("uz-UZ", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return {
+      isExpired,
+      isNear: !isExpired && hoursLeft < 24,
+      formattedDate,
+      statusText,
+    };
   };
 
   const handleOpenUpload = (hwId: string) => {
@@ -256,6 +318,7 @@ export default function StudentDashboardPage() {
       }
 
       setUploadSuccess("✅ Topshiriq muvaffaqiyatli topshirildi va ustozga yuborildi!");
+      playSuccessSound();
       setSelectedFile(null);
       setPreviewUrl(null);
       setActiveUploadHwId(null);
@@ -264,15 +327,18 @@ export default function StudentDashboardPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       setUploadError(msg);
+      playWarningSound();
     } finally {
       setUploading(false);
     }
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.replace("/login");
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -337,6 +403,17 @@ export default function StudentDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Ovozli bildirishnomani sinab ko'rish */}
+            <button
+              type="button"
+              onClick={() => playNotificationSound()}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded-xl transition-all shadow-2xs cursor-pointer"
+              title="Bildirishnoma ovozini sinab ko'rish"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-blue-600" />
+              <span>Ovozni sinash</span>
+            </button>
+
             {user?.groupId && (
               <button
                 type="button"
@@ -548,6 +625,26 @@ export default function StudentDashboardPage() {
                             })}
                           </span>
                         </div>
+
+                        {hw.deadline && (() => {
+                          const dl = getDeadlineInfo(hw.deadline);
+                          if (!dl) return null;
+                          return (
+                            <div
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border mt-2 ${
+                                dl.isExpired
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : dl.isNear
+                                  ? "bg-amber-50 text-amber-900 border-amber-300 animate-pulse font-bold"
+                                  : "bg-blue-50 text-blue-800 border-blue-200"
+                              }`}
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Topshirish muddati: {dl.formattedDate}</span>
+                              <span className="font-bold ml-1">({dl.statusText})</span>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div>
@@ -568,7 +665,7 @@ export default function StudentDashboardPage() {
                           Ustoz Ko&apos;rsatmasi va Topshiriq Sharti:
                         </div>
                         <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium whitespace-pre-line">
-                          {hw.description}
+                          {hw.description || "(Ustoz tomonidan qo'shimcha tavsif kiritilmagan)"}
                         </p>
                       </div>
 
@@ -579,13 +676,13 @@ export default function StudentDashboardPage() {
                           </div>
                           <div
                             onClick={() => setZoomedImage(hw.sampleImageUrl!)}
-                            className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center shadow-xs"
+                            className="relative w-full h-40 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center shadow-xs p-1"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={hw.sampleImageUrl}
                               alt="Teacher sample"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                             />
                             <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1">
                               <Maximize2 className="w-4 h-4" />
@@ -620,15 +717,15 @@ export default function StudentDashboardPage() {
 
                           <div
                             onClick={() => setZoomedImage(sub.imageUrl)}
-                            className="relative w-24 h-16 rounded-xl overflow-hidden border border-amber-300 cursor-pointer shrink-0"
+                            className="relative w-24 h-16 rounded-xl overflow-hidden border border-amber-300 cursor-pointer shrink-0 bg-slate-900/10 flex items-center justify-center p-1"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={sub.imageUrl}
                               alt="My submission"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain"
                             />
-                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-[10px] font-bold">
+                            <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity rounded-xl">
                               Ko&apos;rish
                             </div>
                           </div>
@@ -745,12 +842,12 @@ export default function StudentDashboardPage() {
 
                             {previewUrl ? (
                               <div className="space-y-3">
-                                <div className="relative w-full h-56 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 flex items-center justify-center">
+                                <div className="relative w-full h-56 rounded-xl overflow-hidden bg-slate-950/5 border border-slate-200 flex items-center justify-center p-2">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
                                     src={previewUrl}
                                     alt="Selected preview"
-                                    className="w-full h-full object-cover"
+                                    className="max-h-52 w-auto object-contain rounded-lg shadow-xs"
                                   />
                                 </div>
                                 <p className="text-xs text-blue-600 font-medium">

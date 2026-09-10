@@ -83,14 +83,28 @@ export async function ensureDatabaseReady() {
       CREATE TABLE IF NOT EXISTS homeworks (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        description TEXT NOT NULL,
+        description TEXT,
         sample_image_url TEXT,
         group_id TEXT REFERENCES groups(id) ON DELETE CASCADE,
         admin_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        deadline TIMESTAMPTZ,
         is_active BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `;
+
+    // homeworks jadvaliga deadline ustunini qo'shish va description ni ixtiyoriy qilish
+    try {
+      await sql`ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS deadline TIMESTAMPTZ`;
+    } catch (e) {
+      console.warn("homeworks.deadline migration notice:", e);
+    }
+
+    try {
+      await sql`ALTER TABLE homeworks ALTER COLUMN description DROP NOT NULL`;
+    } catch (e) {
+      console.warn("homeworks.description migration notice:", e);
+    }
 
     // 4. submissions jadvali
     await sql`
@@ -119,12 +133,18 @@ export async function ensureDatabaseReady() {
         id TEXT PRIMARY KEY,
         submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
         admin_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        feedback_text TEXT NOT NULL,
+        feedback_text TEXT,
         verdict VARCHAR(20) NOT NULL DEFAULT 'CORRECT',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `;
+
+    try {
+      await sql`ALTER TABLE review_comments ALTER COLUMN feedback_text DROP NOT NULL`;
+    } catch (e) {
+      console.warn("review_comments.feedback_text migration notice:", e);
+    }
 
     // 6. notifications jadvali
     await sql`

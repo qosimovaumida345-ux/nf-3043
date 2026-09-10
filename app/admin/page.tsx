@@ -21,7 +21,9 @@ import {
   UserCheck,
   BookOpen,
   Settings,
+  Volume2,
 } from "lucide-react";
+import { playNotificationSound, playSuccessSound } from "@/lib/sound";
 
 interface Submission {
   id: string;
@@ -55,6 +57,7 @@ interface LiveNotification {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const [user, setUser] = useState<{ id: string; username: string; role: string; fullName: string } | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,9 +67,9 @@ export default function AdminDashboardPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("PENDING");
 
   // Review state per submission: [submissionId]: { feedbackText, verdict, isSaving }
-  const [reviewDrafts, setReviewDrafts] = useState<{
-    [key: string]: { feedbackText: string; verdict: "CORRECT" | "INCORRECT" | "RETRY"; saving?: boolean };
-  }>({});
+  const [reviewDrafts, setReviewDrafts] = useState<
+    Record<string, { feedbackText: string; verdict: "CORRECT" | "INCORRECT" | "RETRY"; saving?: boolean }>
+  >({});
 
   // Real-time notification banners
   const [liveAlerts, setLiveAlerts] = useState<LiveNotification[]>([]);
@@ -76,18 +79,44 @@ export default function AdminDashboardPage() {
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchInitialData();
-    setupSSE();
+    fetchData();
+    const cleanupSSE = setupSSE();
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        fetchData();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      cleanupSSE?.();
+      window.removeEventListener("pageshow", handlePageShow);
+    };
   }, []);
 
-  const fetchInitialData = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      // Topshiriqlarni yuklash
-      const subRes = await fetch("/api/submissions");
+      const [meRes, subRes] = await Promise.all([
+        fetch("/api/auth/me", { cache: "no-store" }),
+        fetch("/api/submissions", { cache: "no-store" }),
+      ]);
+
+      if (!meRes.ok) {
+        window.location.replace("/login");
+        return;
+      }
+      const meData = await meRes.json();
+      if (meData.user?.role !== "ADMIN") {
+        window.location.replace("/student");
+        return;
+      }
+      setUser(meData.user);
+
       if (!subRes.ok) {
-        if (subRes.status === 401 || subRes.status === 403) {
-          router.push("/login");
+        if (subRes.status === 401) {
+          window.location.replace("/login");
           return;
         }
       }
@@ -128,6 +157,9 @@ export default function AdminDashboardPage() {
 
       eventSource.addEventListener("new-submission", (event) => {
         const payload = JSON.parse(event.data);
+
+        // Ovozli bildirishnoma ijro etish
+        playNotificationSound();
 
         // O'qituvchiga jonli xabar chiqarish
         const newAlert: LiveNotification = {
@@ -175,15 +207,16 @@ export default function AdminDashboardPage() {
   };
 
   const handleSaveReview = async (submissionId: string) => {
-    const draft = reviewDrafts[submissionId];
-    if (!draft || !draft.feedbackText.trim()) {
-      alert("Iltimos, talaba uchun sharh matnini yozing.");
-      return;
-    }
+    const draft = reviewDrafts[submissionId] || {
+      feedbackText: "",
+      verdict: "CORRECT",
+    };
+    const verdict = draft.verdict || "CORRECT";
+    const feedbackText = draft.feedbackText ? draft.feedbackText.trim() : "";
 
     setReviewDrafts((prev) => ({
       ...prev,
-      [submissionId]: { ...prev[submissionId], saving: true },
+      [submissionId]: { ...prev[submissionId], feedbackText, verdict, saving: true },
     }));
 
     try {
@@ -191,8 +224,8 @@ export default function AdminDashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          feedbackText: draft.feedbackText,
-          verdict: draft.verdict,
+          feedbackText,
+          verdict,
         }),
       });
 
@@ -200,17 +233,20 @@ export default function AdminDashboardPage() {
         throw new Error("Sharhni saqlab bo'lmadi.");
       }
 
+      // Muvaffaqiyat ovozi
+      playSuccessSound();
+
       // Topshiriq statusini yangilash
       setSubmissions((prev) =>
         prev.map((s) =>
           s.id === submissionId
             ? {
                 ...s,
-                status: draft.verdict,
+                status: verdict,
                 comment: {
                   id: "temp",
-                  feedbackText: draft.feedbackText,
-                  verdict: draft.verdict,
+                  feedbackText,
+                  verdict,
                   createdAt: new Date().toISOString(),
                 },
               }
@@ -222,7 +258,7 @@ export default function AdminDashboardPage() {
       const reviewAlert: LiveNotification = {
         id: Math.random().toString(36).substring(2, 9),
         title: "Topshiriq baholandi!",
-        message: `Topshiriq "${draft.verdict === "CORRECT" ? "To'g'ri" : draft.verdict === "INCORRECT" ? "Xato" : "Qayta topshirish"}" deb belgilandi va kutilayotganlar ro'yxatidan olib tashlandi.`,
+        message: `Topshiriq "${verdict === "CORRECT" ? "To'g'ri" : verdict === "INCORRECT" ? "Xato" : "Qayta topshirish"}" deb belgilandi va kutilayotganlar ro'yxatidan olib tashlandi.`,
         time: new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
       };
       setLiveAlerts((prev) => [reviewAlert, ...prev.slice(0, 4)]);
@@ -238,9 +274,11 @@ export default function AdminDashboardPage() {
   };
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.replace("/login");
+    }
   };
 
   // Filtrlash
@@ -578,7 +616,7 @@ export default function AdminDashboardPage() {
                     <div className="lg:col-span-7 flex flex-col justify-between bg-slate-50/70 p-5 rounded-2xl border border-slate-200/60 space-y-4">
                       <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                          O&apos;qituvchi Sharhi va Izohi:
+                          O&apos;qituvchi Sharhi va Izohi (Ixtiyoriy):
                         </label>
                         <textarea
                           rows={4}

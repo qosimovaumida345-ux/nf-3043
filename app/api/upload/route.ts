@@ -18,19 +18,20 @@ export async function POST(request: Request) {
 
     // Barcha rasm formatlarini tekshirish (MIME type yoki kengaytma orqali)
     const isImage =
+      !file.type ||
       file.type.startsWith("image/") ||
-      /\.(jpe?g|png|webp|heic|heif|gif|bmp|svg|avif|tiff|jfif)$/i.test(file.name);
+      /\.(jpe?g|png|webp|heic|heif|gif|bmp|svg|avif|tiff|jfif|ico)$/i.test(file.name);
 
     if (!isImage) {
       return NextResponse.json(
-        { error: "Faqat rasm formatidagi fayllar (PNG, JPG, JPEG, WEBP, HEIC, HEIF, BMP, GIF, AVIF) qabul qilinadi." },
+        { error: "Faqat rasm formatidagi fayllar (PNG, JPG, JPEG, WEBP, HEIC, HEIF, BMP, GIF, AVIF, SVG) qabul qilinadi." },
         { status: 400 }
       );
     }
 
-    // Maksimal hajm: 25MB (telefonlardan tushgan katta hajmli suratlar uchun)
-    if (file.size > 25 * 1024 * 1024) {
-      return NextResponse.json({ error: "Rasm hajmi 25MB dan oshmasligi kerak." }, { status: 400 });
+    // Maksimal hajm: 50MB (har qanday sifatli yoki yuqori aniqlikdagi telefon fotosuratlari to'siqsiz o'tishi uchun)
+    if (file.size > 50 * 1024 * 1024) {
+      return NextResponse.json({ error: "Rasm hajmi 50MB dan oshmasligi kerak." }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();

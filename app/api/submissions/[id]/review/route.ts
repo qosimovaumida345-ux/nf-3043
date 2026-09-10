@@ -18,12 +18,14 @@ export async function POST(
     const body = await request.json();
     const { feedbackText, verdict } = body;
 
-    if (!feedbackText || !verdict) {
+    if (!verdict) {
       return NextResponse.json(
-        { error: "Sharh matni va baho natijasini tanlang." },
+        { error: "Baho natijasini tanlang (To'g'ri, Xato yoki Qayta topshirish)." },
         { status: 400 }
       );
     }
+
+    const cleanFeedback = feedbackText ? feedbackText.trim() : "";
 
     const validVerdicts = ["CORRECT", "INCORRECT", "RETRY"];
     if (!validVerdicts.includes(verdict)) {
@@ -60,7 +62,7 @@ export async function POST(
       await db
         .update(reviewComments)
         .set({
-          feedbackText,
+          feedbackText: cleanFeedback,
           verdict,
           updatedAt: now,
         })
@@ -70,7 +72,7 @@ export async function POST(
         id: "rev-" + Math.random().toString(36).substring(2, 10),
         submissionId,
         adminId: session.id,
-        feedbackText,
+        feedbackText: cleanFeedback,
         verdict,
         createdAt: now,
         updatedAt: now,
@@ -86,7 +88,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       verdict,
-      feedbackText,
+      feedbackText: cleanFeedback,
       updatedAt: now.toISOString(),
     });
   } catch (error) {

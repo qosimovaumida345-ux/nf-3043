@@ -24,6 +24,7 @@ export async function GET() {
           sampleImageUrl: homeworks.sampleImageUrl,
           groupId: homeworks.groupId,
           groupName: groups.name,
+          deadline: homeworks.deadline,
           isActive: homeworks.isActive,
           createdAt: homeworks.createdAt,
         })
@@ -71,6 +72,7 @@ export async function GET() {
           sampleImageUrl: homeworks.sampleImageUrl,
           groupId: homeworks.groupId,
           groupName: groups.name,
+          deadline: homeworks.deadline,
           createdAt: homeworks.createdAt,
         })
         .from(homeworks)
@@ -132,11 +134,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { title, description, sampleImageUrl, groupId } = body;
+    const { title, description, sampleImageUrl, groupId, deadline } = body;
 
-    if (!title || !description) {
+    if (!title || !title.trim()) {
       return NextResponse.json(
-        { error: "Uy ishi sarlavhasi va tavsifi to'ldirilishi shart." },
+        { error: "Uy ishi mavzu sarlavhasini kiritish shart." },
         { status: 400 }
       );
     }
@@ -145,14 +147,16 @@ export async function POST(request: Request) {
     const db = getDb();
 
     const homeworkId = "hw-" + Math.random().toString(36).substring(2, 10);
+    const parsedDeadline = deadline ? new Date(deadline) : null;
 
     await db.insert(homeworks).values({
       id: homeworkId,
       title: title.trim(),
-      description: description.trim(),
+      description: description ? description.trim() : "",
       sampleImageUrl: sampleImageUrl || null,
       groupId: groupId || null, // null bo'lsa barcha guruhlar uchun
       adminId: session.id,
+      deadline: parsedDeadline && !isNaN(parsedDeadline.getTime()) ? parsedDeadline : null,
       isActive: true,
     });
 
@@ -160,10 +164,11 @@ export async function POST(request: Request) {
       success: true,
       homework: {
         id: homeworkId,
-        title,
-        description,
+        title: title.trim(),
+        description: description ? description.trim() : "",
         sampleImageUrl,
         groupId,
+        deadline: parsedDeadline,
       },
     });
   } catch (error) {

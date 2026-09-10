@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, User, ArrowRight, Eye, EyeOff, AlertCircle, Sparkles } from "lucide-react";
+import { Lock, User, ArrowRight, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get("redirect");
 
@@ -14,7 +13,45 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Brauzer orqaga qaytganda (BFCache) eskirgan holatni yangilash
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
+  // Agar foydalanuvchi allaqachon tizimga kirgan bo'lsa, mos sahifaga yo'naltirish
+  useEffect(() => {
+    let isMounted = true;
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.user) {
+            const target = data.user.role === "ADMIN" ? "/admin" : "/student";
+            window.location.replace(redirectPath || target);
+            return;
+          }
+        }
+      } catch {
+        // Avtorizatsiya yo'q bo'lsa login formasi ko'rinadi
+      } finally {
+        if (isMounted) setCheckingSession(false);
+      }
+    };
+    checkAuth();
+    return () => {
+      isMounted = false;
+    };
+  }, [redirectPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,20 +73,23 @@ function LoginForm() {
         return;
       }
 
-      // Rol bo'yicha mos panelga yo'naltirish
-      if (redirectPath) {
-        router.push(redirectPath);
-      } else if (data.user.role === "ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/student");
-      }
-      router.refresh();
+      // window.location.replace orqali toza o'tish (history chalkashmasligi va xotira keshi tozalanishi uchun)
+      const target = redirectPath || (data.user.role === "ADMIN" ? "/admin" : "/student");
+      window.location.replace(target);
     } catch {
       setError("Serverga ulanishda xatolik yuz berdi.");
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="w-full max-w-md p-12 rounded-[24px] bg-white/80 backdrop-blur-2xl border border-white/80 shadow-2xl flex flex-col items-center justify-center space-y-3 text-center">
+        <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-semibold text-slate-600">Sessiya tekshirilmoqda...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md">

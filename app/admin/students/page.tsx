@@ -106,6 +106,14 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     fetchData();
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        fetchData();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
   // Active chat auto-polling every 3 seconds
@@ -128,10 +136,21 @@ export default function AdminSettingsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [stRes, grpRes] = await Promise.all([
-        fetch("/api/admin/students"),
-        fetch("/api/admin/groups"),
+      const [meRes, stRes, grpRes] = await Promise.all([
+        fetch("/api/auth/me", { cache: "no-store" }),
+        fetch("/api/admin/students", { cache: "no-store" }),
+        fetch("/api/admin/groups", { cache: "no-store" }),
       ]);
+
+      if (!meRes.ok) {
+        window.location.replace("/login");
+        return;
+      }
+      const meData = await meRes.json();
+      if (meData.user?.role !== "ADMIN") {
+        window.location.replace("/student");
+        return;
+      }
 
       if (stRes.ok) {
         const stData = await stRes.json();
