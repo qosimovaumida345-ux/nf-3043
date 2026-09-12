@@ -22,11 +22,18 @@ import {
   BookOpen,
   Settings,
   Volume2,
+  History,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { playNotificationSound, playSuccessSound } from "@/lib/sound";
+import ImageCarousel from "@/components/ImageCarousel";
+import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 
 interface Submission {
   id: string;
+  homeworkId?: string | null;
+  homeworkTitle?: string | null;
   studentId: string;
   studentName: string;
   studentUsername: string;
@@ -76,8 +83,15 @@ export default function AdminDashboardPage() {
   const [liveAlerts, setLiveAlerts] = useState<LiveNotification[]>([]);
   const [sseConnected, setSseConnected] = useState(false);
 
-  // Zoom Modal
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  // Accordion state for previous attempts per groupKey
+  const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
+
+  // Zoom Modal state
+  const [zoomModal, setZoomModal] = useState<{
+    images: string[];
+    index: number;
+    title?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -282,10 +296,48 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Filtrlash
-  const filteredSubmissions = submissions.filter((s) => {
-    if (selectedStudent !== "ALL" && s.studentId !== selectedStudent) return false;
-    if (selectedStatus !== "ALL" && s.status !== selectedStatus) return false;
+  // 1. Talabaning uy ishlari bo'yicha guruhlash:
+  // Bir talaba bitta vazifani necha marta qayta topshirgan bo'lmasin, hammasi BITTA CARD ichida jamlanadi!
+  const groupedMap = new Map<string, Submission[]>();
+
+  submissions.forEach((s) => {
+    const key = s.homeworkId
+      ? `${s.studentId}_${s.homeworkId}`
+      : `${s.studentId}_${(s.taskTitle || "vazifa").trim().toLowerCase()}`;
+    const list = groupedMap.get(key) || [];
+    list.push(s);
+    groupedMap.set(key, list);
+  });
+
+  const groupedCards = Array.from(groupedMap.entries()).map(([groupKey, subs]) => {
+    // Eng oxirgi urinish birinchi qilib saralanadi
+    const sorted = [...subs].sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    );
+    const latest = sorted[0];
+    const previousAttempts = sorted.slice(1);
+
+    const latestImages = (latest.imageUrls && latest.imageUrls.length > 0)
+      ? latest.imageUrls
+      : (latest.imageUrl ? [latest.imageUrl] : []);
+
+    return {
+      groupKey,
+      studentId: latest.studentId,
+      studentName: latest.studentName,
+      studentUsername: latest.studentUsername,
+      taskTitle: latest.taskTitle || latest.homeworkTitle || "Uy ishi topshirig'i",
+      latest,
+      previousAttempts,
+      totalAttempts: sorted.length,
+      images: latestImages,
+    };
+  });
+
+  // Filtrlash (student va status bo'yicha)
+  const filteredCards = groupedCards.filter((card) => {
+    if (selectedStudent !== "ALL" && card.studentId !== selectedStudent) return false;
+    if (selectedStatus !== "ALL" && card.latest.status !== selectedStatus) return false;
     return true;
   });
 
@@ -432,7 +484,7 @@ export default function AdminDashboardPage() {
           >
             <div>
               <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Jami Topshiriqlar</div>
-              <div className="text-2xl font-fustat font-bold text-slate-900 mt-1">{submissions.length}</div>
+              <div className="text-2xl font-fustat font-bold text-slate-900 mt-1">{groupedCards.length}</div>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
               <Users className="w-5 h-5" />
@@ -448,7 +500,7 @@ export default function AdminDashboardPage() {
             <div>
               <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Kutilmoqda (Pending)</div>
               <div className="text-2xl font-fustat font-bold text-blue-600 mt-1">
-                {submissions.filter((s) => s.status === "PENDING").length}
+                {groupedCards.filter((c) => c.latest.status === "PENDING").length}
               </div>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
@@ -465,7 +517,7 @@ export default function AdminDashboardPage() {
             <div>
               <div className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">To&apos;g&apos;ri Qabul Qilingan</div>
               <div className="text-2xl font-fustat font-bold text-emerald-600 mt-1">
-                {submissions.filter((s) => s.status === "CORRECT").length}
+                {groupedCards.filter((c) => c.latest.status === "CORRECT").length}
               </div>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
@@ -482,7 +534,7 @@ export default function AdminDashboardPage() {
             <div>
               <div className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Qayta Topshirish</div>
               <div className="text-2xl font-fustat font-bold text-amber-600 mt-1">
-                {submissions.filter((s) => s.status === "RETRY").length}
+                {groupedCards.filter((c) => c.latest.status === "RETRY").length}
               </div>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
@@ -528,16 +580,16 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="text-xs text-slate-500">
-            Ko&apos;rsatilmoqda: <span className="font-bold text-slate-900">{filteredSubmissions.length}</span> ta topshiriq
+            Ko&apos;rsatilmoqda: <span className="font-bold text-slate-900">{filteredCards.length}</span> ta topshiriq card
           </div>
         </div>
 
-        {/* Submissions List */}
+        {/* Submissions List: 1 Card per Student + Homework */}
         {loading ? (
           <div className="flex items-center justify-center py-24 bg-white/50 rounded-3xl border border-slate-200">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : filteredSubmissions.length === 0 ? (
+        ) : filteredCards.length === 0 ? (
           <div className="text-center py-20 bg-white/60 rounded-3xl border border-dashed border-slate-300">
             <Radio className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h4 className="text-sm font-semibold text-slate-700">Topshiriqlar topilmadi</h4>
@@ -547,7 +599,8 @@ export default function AdminDashboardPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredSubmissions.map((sub, idx) => {
+            {filteredCards.map((card, idx) => {
+              const sub = card.latest;
               const draft = reviewDrafts[sub.id] || {
                 feedbackText: sub.comment?.feedbackText || "",
                 verdict: (sub.comment?.verdict as "CORRECT" | "INCORRECT" | "RETRY") || "CORRECT",
@@ -555,24 +608,30 @@ export default function AdminDashboardPage() {
 
               return (
                 <motion.div
-                  key={sub.id}
+                  key={card.groupKey}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * idx, duration: 0.4 }}
-                  className="rounded-3xl p-6 bg-white/85 backdrop-blur-xl border border-white/90 shadow-sm hover:shadow-xl hover:border-blue-300/60 transition-all space-y-5"
+                  className="rounded-3xl p-6 sm:p-7 bg-white/90 backdrop-blur-xl border border-white/90 shadow-sm hover:shadow-xl hover:border-blue-300/60 transition-all space-y-6"
                 >
-                  {/* Top Bar: Student info, date, status */}
+                  {/* Top Bar: Student info, task, resubmission badge, date, status */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">
-                        {sub.studentName.charAt(0).toUpperCase()}
+                      <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base shadow-xs border border-blue-100">
+                        {card.studentName.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-slate-900">{sub.studentName}</h4>
-                          <span className="text-[11px] font-mono text-slate-400">@{sub.studentUsername}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-bold text-sm sm:text-base text-slate-900">{card.studentName}</h4>
+                          <span className="text-[11px] font-mono text-slate-400">@{card.studentUsername}</span>
+                          {card.totalAttempts > 1 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
+                              <History className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Qayta topshirilgan ({card.totalAttempts}-urinish)</span>
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-blue-600 font-medium mt-0.5">{sub.taskTitle}</div>
+                        <div className="text-xs text-blue-600 font-semibold mt-0.5">{card.taskTitle}</div>
                       </div>
                     </div>
 
@@ -592,73 +651,113 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Body: Left = Image, Right = Feedback Form */}
+                  {/* Body: Left = Carousel & Previous attempts, Right = Feedback Form */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    {/* Left: Code Photo Thumbnail */}
-                    <div className="lg:col-span-5 space-y-2">
-                      {(() => {
-                        const images = (sub.imageUrls && sub.imageUrls.length > 0)
-                          ? sub.imageUrls
-                          : (sub.imageUrl ? [sub.imageUrl] : []);
+                    {/* Left: Code Photo Carousel */}
+                    <div className="lg:col-span-6 space-y-3">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-1">
+                        <span>Eng so&apos;nggi topshirilgan fotosuratlar:</span>
+                        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full">
+                          {card.images.length} ta rasm
+                        </span>
+                      </div>
 
-                        if (images.length === 1) {
-                          return (
-                            <div
-                              onClick={() => setZoomedImage(images[0])}
-                              className="relative w-full h-64 sm:h-72 rounded-2xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={images[0]}
-                                alt="Code photo"
-                                className="w-full h-full object-contain bg-slate-950/5 group-hover:scale-102 transition-transform duration-200"
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 rounded-2xl">
-                                <Maximize2 className="w-5 h-5" />
-                                <span>To&apos;liq ekranda ko&apos;rish</span>
-                              </div>
-                            </div>
-                          );
+                      <ImageCarousel
+                        images={card.images}
+                        title={`${card.studentName} - ${card.taskTitle}`}
+                        maxHeightClass="h-64 sm:h-72"
+                        onZoom={(imgIdx) =>
+                          setZoomModal({
+                            images: card.images,
+                            index: imgIdx,
+                            title: `${card.studentName} - ${card.taskTitle}`,
+                          })
                         }
+                      />
 
-                        return (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-xs font-bold text-slate-600 px-1">
-                              <span>Talaba topshirgan kod suratlari:</span>
-                              <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                                {images.length} ta rasm
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {images.map((imgUrl, imgIdx) => (
-                                <div
-                                  key={imgIdx}
-                                  onClick={() => setZoomedImage(imgUrl)}
-                                  className="relative h-36 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={imgUrl}
-                                    alt={`Code part ${imgIdx + 1}`}
-                                    className="w-full h-full object-contain bg-slate-950/5 group-hover:scale-105 transition-transform"
-                                  />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 rounded-xl">
-                                    <Maximize2 className="w-4 h-4" />
-                                    <span>#{imgIdx + 1}</span>
+                      {/* Agar talaba oldin ham topshirgan bo'lsa - Avvalgi urinishlar tarixi (Akkordeon) */}
+                      {card.previousAttempts.length > 0 && (
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedHistory((prev) => ({
+                                ...prev,
+                                [card.groupKey]: !prev[card.groupKey],
+                              }))
+                            }
+                            className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-xs font-bold text-slate-700 flex items-center justify-between transition-colors cursor-pointer border border-slate-200"
+                          >
+                            <span className="flex items-center gap-2">
+                              <History className="w-4 h-4 text-purple-600" />
+                              <span>Avvalgi urinishlar tarixi ({card.previousAttempts.length} ta eski versiya)</span>
+                            </span>
+                            {expandedHistory[card.groupKey] ? (
+                              <ChevronUp className="w-4 h-4 text-slate-500" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-slate-500" />
+                            )}
+                          </button>
+
+                          {expandedHistory[card.groupKey] && (
+                            <div className="mt-2.5 space-y-3 p-3.5 bg-slate-100/70 rounded-2xl border border-slate-200 animate-fade-in">
+                              {card.previousAttempts.map((prevAtt, prevIdx) => {
+                                const prevImages =
+                                  prevAtt.imageUrls && prevAtt.imageUrls.length > 0
+                                    ? prevAtt.imageUrls
+                                    : prevAtt.imageUrl
+                                    ? [prevAtt.imageUrl]
+                                    : [];
+
+                                return (
+                                  <div
+                                    key={prevAtt.id}
+                                    className="p-3 bg-white rounded-xl border border-slate-200 space-y-2 shadow-2xs"
+                                  >
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="font-bold text-slate-700">
+                                        {card.totalAttempts - 1 - prevIdx}-urinish
+                                      </span>
+                                      <span className="text-[11px] text-slate-400">
+                                        {new Date(prevAtt.submittedAt).toLocaleString("uz-UZ")}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {getStatusBadge(prevAtt.status)}
+                                      {prevAtt.comment?.feedbackText && (
+                                        <span className="text-xs text-slate-600 italic">
+                                          &ldquo;{prevAtt.comment.feedbackText}&rdquo;
+                                        </span>
+                                      )}
+                                    </div>
+                                    {prevImages.length > 0 && (
+                                      <ImageCarousel
+                                        images={prevImages}
+                                        title={`${card.studentName} (${card.totalAttempts - 1 - prevIdx}-urinish)`}
+                                        maxHeightClass="h-40 sm:h-48"
+                                        onZoom={(imgIdx) =>
+                                          setZoomModal({
+                                            images: prevImages,
+                                            index: imgIdx,
+                                            title: `${card.studentName} (${card.totalAttempts - 1 - prevIdx}-urinish)`,
+                                          })
+                                        }
+                                      />
+                                    )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
-                          </div>
-                        );
-                      })()}
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Right: Review & Verdict Form */}
-                    <div className="lg:col-span-7 flex flex-col justify-between bg-slate-50/70 p-5 rounded-2xl border border-slate-200/60 space-y-4">
+                    <div className="lg:col-span-6 flex flex-col justify-between bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
                       <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                          O&apos;qituvchi Sharhi va Izohi (Ixtiyoriy):
+                          O&apos;qituvchi Sharhi va Izohi:
                         </label>
                         <textarea
                           rows={4}
@@ -740,7 +839,7 @@ export default function AdminDashboardPage() {
                           type="button"
                           disabled={draft.saving}
                           onClick={() => handleSaveReview(sub.id)}
-                          className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                          className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                         >
                           {draft.saving ? (
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -761,30 +860,14 @@ export default function AdminDashboardPage() {
         )}
       </main>
 
-      {/* Full-screen Zoom Modal */}
-      {zoomedImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
-          onClick={() => setZoomedImage(null)}
-        >
-          <button
-            onClick={() => setZoomedImage(null)}
-            className="absolute top-6 right-6 p-2.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <div
-            className="relative max-w-6xl max-h-[85vh] flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={zoomedImage}
-              alt="Zoomed code preview"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
-            />
-          </div>
-        </div>
+      {/* Enhanced Zoom Modal */}
+      {zoomModal && (
+        <EnhancedZoomModal
+          images={zoomModal.images}
+          initialIndex={zoomModal.index}
+          title={zoomModal.title}
+          onClose={() => setZoomModal(null)}
+        />
       )}
     </div>
   );

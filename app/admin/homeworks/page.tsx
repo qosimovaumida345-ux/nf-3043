@@ -20,6 +20,8 @@ import {
   Bell,
   AlertTriangle,
 } from "lucide-react";
+import ImageCarousel from "@/components/ImageCarousel";
+import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 
 interface Group {
   id: string;
@@ -59,7 +61,11 @@ export default function AdminHomeworksPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zoom Modal
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [zoomModal, setZoomModal] = useState<{
+    images: string[];
+    index: number;
+    title?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchHomeworksAndGroups();
@@ -594,30 +600,22 @@ export default function AdminHomeworksPage() {
                           <div className="sm:col-span-5 space-y-2">
                             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
                               <span>Ustoz Namunalari:</span>
-                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold">
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full font-bold">
                                 {images.length} ta rasm
                               </span>
                             </div>
-                            <div className={`grid ${images.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"} gap-2`}>
-                              {images.map((imgUrl, imgIdx) => (
-                                <div
-                                  key={imgIdx}
-                                  onClick={() => setZoomedImage(imgUrl)}
-                                  className="relative h-24 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center p-1"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={imgUrl}
-                                    alt={`Sample ${imgIdx + 1}`}
-                                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                  />
-                                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold gap-1 rounded-xl">
-                                    <Maximize2 className="w-3 h-3" />
-                                    <span>#{imgIdx + 1}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                            <ImageCarousel
+                              images={images}
+                              title={`${hw.title} - Namunalar`}
+                              maxHeightClass="h-44 sm:h-52"
+                              onZoom={(imgIdx) =>
+                                setZoomModal({
+                                  images,
+                                  index: imgIdx,
+                                  title: `${hw.title} - Ustoz namunasi`,
+                                })
+                              }
+                            />
                           </div>
                         );
                       })()}
@@ -631,30 +629,14 @@ export default function AdminHomeworksPage() {
         </div>
       </main>
 
-      {/* Zoom Modal */}
-      {zoomedImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
-          onClick={() => setZoomedImage(null)}
-        >
-          <button
-            onClick={() => setZoomedImage(null)}
-            className="absolute top-6 right-6 p-2.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <div
-            className="relative max-w-5xl max-h-[85vh] flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={zoomedImage}
-              alt="Zoomed sample preview"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
-            />
-          </div>
-        </div>
+      {/* Enhanced Zoom Modal */}
+      {zoomModal && (
+        <EnhancedZoomModal
+          images={zoomModal.images}
+          initialIndex={zoomModal.index}
+          title={zoomModal.title}
+          onClose={() => setZoomModal(null)}
+        />
       )}
     </div>
   );

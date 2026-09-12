@@ -117,7 +117,8 @@ export async function GET() {
         })
         .from(submissions)
         .leftJoin(reviewComments, eq(submissions.id, reviewComments.submissionId))
-        .where(eq(submissions.studentId, session.id));
+        .where(eq(submissions.studentId, session.id))
+        .orderBy(desc(submissions.submittedAt));
 
       const enrichedHomeworks = studentHomeworks.map((hw) => {
         const sub = studentSubmissions.find((s) => s.homeworkId === hw.id);

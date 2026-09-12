@@ -26,7 +26,9 @@ import {
   BellRing,
   Plus,
 } from "lucide-react";
-import { playNotificationSound, playSuccessSound, playWarningSound } from "@/lib/sound";
+import { playNotificationSound, playSuccessSound } from "@/lib/sound";
+import ImageCarousel from "@/components/ImageCarousel";
+import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 
 interface Comment {
   id: string;
@@ -86,17 +88,20 @@ export default function StudentDashboardPage() {
   const [homeworks, setHomeworks] = useState<Homework[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active submission drawer/state: [homeworkId]: { files, previewUrls, uploading, error, success }
+  // Active submission drawer/state: [homeworkId]: { files, previewUrls, uploading, error }
   const [activeUploadHwId, setActiveUploadHwId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Zoom Modal state
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [zoomModal, setZoomModal] = useState<{
+    images: string[];
+    index: number;
+    title?: string;
+  } | null>(null);
 
   // Group Chat Modal state
   const [chatOpen, setChatOpen] = useState(false);
@@ -265,7 +270,6 @@ export default function StudentDashboardPage() {
     setSelectedFiles([]);
     setPreviewUrls([]);
     setUploadError(null);
-    setUploadSuccess(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -276,7 +280,6 @@ export default function StudentDashboardPage() {
       const newUrls = files.map((f) => URL.createObjectURL(f));
       setPreviewUrls((prev) => [...prev, ...newUrls]);
       setUploadError(null);
-      setUploadSuccess(null);
     }
   };
 
@@ -341,8 +344,7 @@ export default function StudentDashboardPage() {
         throw new Error(subData.error || "Topshiriqni saqlashda xatolik.");
       }
 
-      setUploadSuccess("✅ Topshiriq muvaffaqiyatli topshirildi va ustozga yuborildi!");
-      playSuccessSound();
+      // OVOZSIZ VA TOASTSIZ: bevosita holatni tozalash va panelni yopish
       setSelectedFiles([]);
       setPreviewUrls([]);
       setActiveUploadHwId(null);
@@ -351,8 +353,7 @@ export default function StudentDashboardPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       setUploadError(msg);
-      playWarningSound();
-      // Xatolik yuz berganda qayta urinish imkoni beriladi
+      // Xatolik yuz berganda qayta urinish imkoni beriladi (ovozsiz)
       await fetchSessionAndHomeworks();
     } finally {
       setUploading(false);
@@ -429,16 +430,6 @@ export default function StudentDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Ovozli bildirishnomani sinab ko'rish */}
-            <button
-              type="button"
-              onClick={() => playNotificationSound()}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded-xl transition-all shadow-2xs cursor-pointer"
-              title="Bildirishnoma ovozini sinab ko'rish"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-blue-600" />
-              <span>Ovozni sinash</span>
-            </button>
 
             {user?.groupId && (
               <button
@@ -704,30 +695,22 @@ export default function StudentDashboardPage() {
                           <div className="md:col-span-4 space-y-2">
                             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
                               <span>Ustoz Namunasi:</span>
-                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold">
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full font-bold">
                                 {sampleImages.length} ta rasm
                               </span>
                             </div>
-                            <div className={`grid ${sampleImages.length === 1 ? "grid-cols-1" : "grid-cols-2"} gap-2`}>
-                              {sampleImages.map((imgUrl, imgIdx) => (
-                                <div
-                                  key={imgIdx}
-                                  onClick={() => setZoomedImage(imgUrl)}
-                                  className="relative h-28 rounded-xl overflow-hidden bg-slate-900/5 border border-slate-200 cursor-pointer group flex items-center justify-center shadow-xs p-1"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={imgUrl}
-                                    alt={`Teacher sample ${imgIdx + 1}`}
-                                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                                  />
-                                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 rounded-xl">
-                                    <Maximize2 className="w-3.5 h-3.5" />
-                                    <span>#{imgIdx + 1}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                            <ImageCarousel
+                              images={sampleImages}
+                              title={`${hw.title} - Ustoz namunasi`}
+                              maxHeightClass="h-44 sm:h-52"
+                              onZoom={(idx) =>
+                                setZoomModal({
+                                  images: sampleImages,
+                                  index: idx,
+                                  title: `${hw.title} - Ustoz namunasi`,
+                                })
+                              }
+                            />
                           </div>
                         );
                       })()}
@@ -742,122 +725,174 @@ export default function StudentDashboardPage() {
                           : (sub.imageUrl ? [sub.imageUrl] : []);
 
                         return (
-                          <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          <div className="p-5 sm:p-6 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-4">
                             <div className="flex items-start gap-3">
                               <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
                                 <Lock className="w-5 h-5" />
                               </div>
                               <div>
-                                <h5 className="font-bold text-xs sm:text-sm text-amber-900">
+                                <h5 className="font-bold text-sm text-amber-900">
                                   Topshiriq yuborilgan — O&apos;qituvchi tekshiruvida!
                                 </h5>
                                 <p className="text-xs text-amber-700 mt-0.5">
                                   Ustoz tekshirib baho yoki izoh e&apos;lon qilmaguncha qayta rasm yubora olmaysiz.
                                 </p>
-                                <div className="text-[11px] text-amber-600/80 mt-1">
+                                <div className="text-[11px] text-amber-600/80 mt-1 font-medium">
                                   Yuborilgan vaqt: {new Date(sub.submittedAt).toLocaleString("uz-UZ")} • {subImages.length} ta rasm topshirilgan
                                 </div>
                               </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 shrink-0">
-                              {subImages.map((imgUrl, imgIdx) => (
-                                <div
-                                  key={imgIdx}
-                                  onClick={() => setZoomedImage(imgUrl)}
-                                  className="relative w-20 h-14 rounded-xl overflow-hidden border border-amber-300 cursor-pointer shrink-0 bg-slate-900/10 flex items-center justify-center p-1"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={imgUrl}
-                                    alt={`My submission ${imgIdx + 1}`}
-                                    className="w-full h-full object-contain"
-                                  />
-                                  <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity rounded-xl">
-                                    #{imgIdx + 1}
-                                  </div>
+                            {subImages.length > 0 && (
+                              <div className="pt-2 border-t border-amber-200/60">
+                                <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wider mb-2">
+                                  Topshirgan kod fotosuratlaringiz:
                                 </div>
-                              ))}
-                            </div>
+                                <ImageCarousel
+                                  images={subImages}
+                                  title="Mening topshirilgan kodim"
+                                  maxHeightClass="h-48 sm:h-64"
+                                  onZoom={(idx) =>
+                                    setZoomModal({
+                                      images: subImages,
+                                      index: idx,
+                                      title: `${hw.title} - Mening kodim`,
+                                    })
+                                  }
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
 
                       {/* Case 2: To'g'ri qabul qilingan (CORRECT) */}
-                      {sub && sub.status === "CORRECT" && (
-                        <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs sm:text-sm">
-                              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                              <span>Ustoz topshiriqni to&apos;g&apos;ri deb qabul qildi!</span>
-                            </div>
-                            <span className="text-[11px] text-emerald-600">
-                              {new Date(sub.submittedAt).toLocaleDateString("uz-UZ")}
-                            </span>
-                          </div>
+                      {sub && sub.status === "CORRECT" && (() => {
+                        const subImages = (sub.imageUrls && sub.imageUrls.length > 0)
+                          ? sub.imageUrls
+                          : (sub.imageUrl ? [sub.imageUrl] : []);
 
-                          {sub.comment && (
-                            <div className="p-3.5 rounded-xl bg-white/80 border border-emerald-100 text-xs text-slate-800 font-medium leading-relaxed">
-                              Ustoz izohi: &ldquo;{sub.comment.feedbackText}&rdquo;
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Case 3: Xato yoki Qayta topshirish so'ralgan (INCORRECT / RETRY) */}
-                      {sub && (sub.status === "INCORRECT" || sub.status === "RETRY") && (
-                        <div className="p-5 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-rose-800 font-bold text-xs sm:text-sm">
-                              <XCircle className="w-5 h-5 text-rose-600" />
-                              <span>
-                                {sub.status === "RETRY" ? "Qayta topshirish so'raldi" : "Kodingizda xatolik aniqlandi"}
+                        return (
+                          <div className="p-5 sm:p-6 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                <span>Ustoz topshiriqni to&apos;g&apos;ri deb qabul qildi!</span>
+                              </div>
+                              <span className="text-[11px] text-emerald-600 font-medium">
+                                {new Date(sub.submittedAt).toLocaleDateString("uz-UZ")}
                               </span>
                             </div>
-                          </div>
 
-                          {sub.comment && (
-                            <div className="p-3.5 rounded-xl bg-white/90 border border-rose-100 text-xs text-rose-900 font-medium leading-relaxed">
-                              Ustoz kamchiliklarni ko&apos;rsatdi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                            {sub.comment && (
+                              <div className="p-3.5 rounded-xl bg-white/80 border border-emerald-100 text-xs text-slate-800 font-medium leading-relaxed">
+                                Ustoz izohi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                              </div>
+                            )}
+
+                            {subImages.length > 0 && (
+                              <div className="pt-2 border-t border-emerald-200/60">
+                                <div className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-2">
+                                  Qabul qilingan kod fotosuratlari:
+                                </div>
+                                <ImageCarousel
+                                  images={subImages}
+                                  title="Qabul qilingan kod"
+                                  maxHeightClass="h-44 sm:h-56"
+                                  onZoom={(idx) =>
+                                    setZoomModal({
+                                      images: subImages,
+                                      index: idx,
+                                      title: `${hw.title} - Qabul qilingan kod`,
+                                    })
+                                  }
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Case 3: Xato yoki Qayta topshirish so'ralgan (INCORRECT / RETRY) */}
+                      {sub && (sub.status === "INCORRECT" || sub.status === "RETRY") && (() => {
+                        const subImages = (sub.imageUrls && sub.imageUrls.length > 0)
+                          ? sub.imageUrls
+                          : (sub.imageUrl ? [sub.imageUrl] : []);
+
+                        return (
+                          <div className="p-5 sm:p-6 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-rose-800 font-bold text-sm">
+                                <XCircle className="w-5 h-5 text-rose-600" />
+                                <span>
+                                  {sub.status === "RETRY" ? "Qayta topshirish so'raldi" : "Kodingizda xatolik aniqlandi"}
+                                </span>
+                              </div>
                             </div>
-                          )}
 
-                          <div className="pt-1">
-                            <button
-                              onClick={() => handleOpenUpload(hw.id)}
-                              className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-2"
-                            >
-                              <UploadCloud className="w-4 h-4" />
-                              <span>Xatoni to&apos;g&apos;rilab, yangi rasm yuklash</span>
-                            </button>
+                            {sub.comment && (
+                              <div className="p-3.5 rounded-xl bg-white/90 border border-rose-100 text-xs text-rose-900 font-medium leading-relaxed">
+                                Ustoz kamchiliklarni ko&apos;rsatdi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                              </div>
+                            )}
+
+                            {subImages.length > 0 && (
+                              <div className="pt-2 border-t border-rose-200/60">
+                                <div className="text-[11px] font-bold text-rose-900 uppercase tracking-wider mb-2">
+                                  Oldin topshirilgan fotosuratlar:
+                                </div>
+                                <ImageCarousel
+                                  images={subImages}
+                                  title="Oldingi topshirilgan kod"
+                                  maxHeightClass="h-44 sm:h-56"
+                                  onZoom={(idx) =>
+                                    setZoomModal({
+                                      images: subImages,
+                                      index: idx,
+                                      title: `${hw.title} - Oldingi kod`,
+                                    })
+                                  }
+                                />
+                              </div>
+                            )}
+
+                            <div className="pt-2">
+                              <button
+                                onClick={() => handleOpenUpload(hw.id)}
+                                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 via-amber-600 to-rose-700 hover:from-rose-700 hover:to-amber-700 text-white text-sm font-bold shadow-xl shadow-rose-500/25 border border-rose-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 cursor-pointer ring-4 ring-rose-500/10"
+                              >
+                                <UploadCloud className="w-5 h-5 animate-pulse" />
+                                <span>Xatoni to&apos;g&apos;rilab, yangi kod suratini yuklash</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
-                      {/* Case 4: Hali topshirilmagan bo'lsa */}
+                      {/* Case 4: Hali topshirilmagan bo'lsa - Katta va Aniq Ko'rinuvchi Tugma */}
                       {!sub && !isUploadingThis && (
-                        <div className="flex justify-end pt-2">
+                        <div className="flex justify-end pt-3">
                           <button
                             onClick={() => handleOpenUpload(hw.id)}
-                            className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md transition-all flex items-center gap-2"
+                            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white text-sm font-bold shadow-xl shadow-blue-500/25 border border-blue-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 cursor-pointer ring-4 ring-blue-500/10"
                           >
-                            <UploadCloud className="w-4 h-4" />
-                            <span>Ushbu Uy Ishini Topshirish</span>
+                            <UploadCloud className="w-5 h-5 animate-pulse" />
+                            <span>Kod Fotosuratini Yuklash & Topshirish</span>
                           </button>
                         </div>
                       )}
 
                       {/* UPLOAD FORM (agar ochilgan bo'lsa) */}
                       {isUploadingThis && (
-                        <div className="p-5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-4 animate-fade-in">
+                        <div className="p-5 sm:p-6 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-4 animate-fade-in shadow-inner">
                           <div className="flex items-center justify-between border-b border-blue-200/60 pb-3">
-                            <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                            <div className="flex items-center gap-2 text-sm font-bold text-blue-900">
                               <FileCode2 className="w-4 h-4 text-blue-600" />
                               <span>Kod Fotosuratini Yuklash ({hw.title})</span>
                             </div>
                             <button
                               onClick={() => setActiveUploadHwId(null)}
-                              className="text-slate-400 hover:text-slate-600"
+                              className="text-slate-400 hover:text-slate-600 p-1"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -870,20 +905,13 @@ export default function StudentDashboardPage() {
                             </div>
                           )}
 
-                          {uploadSuccess && (
-                            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                              <span>{uploadSuccess}</span>
-                            </div>
-                          )}
-
                           <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="block text-xs font-semibold text-slate-700">
-                                Kod Fotosuratlari (1 ta yoki bir nechta rasm)
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                Kod Fotosuratlari (Hohlagancha ko&apos;p rasm tanlashingiz mumkin)
                               </label>
                               {previewUrls.length > 0 && (
-                                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                <span className="text-xs font-bold text-blue-700 bg-blue-100/80 px-2.5 py-0.5 rounded-full">
                                   {previewUrls.length} ta rasm tanlandi
                                 </span>
                               )}
@@ -899,8 +927,8 @@ export default function StudentDashboardPage() {
                             />
 
                             {previewUrls.length > 0 ? (
-                              <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-2xl">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                              <div className="space-y-3 p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
                                   {previewUrls.map((url, idx) => (
                                     <div
                                       key={idx}
@@ -930,13 +958,13 @@ export default function StudentDashboardPage() {
                                   ))}
                                 </div>
 
-                                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                                <div className="flex items-center justify-between pt-3 border-t border-slate-200/60">
                                   <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
                                   >
-                                    <Plus className="w-3.5 h-3.5" />
+                                    <Plus className="w-4 h-4" />
                                     <span>Yana rasm qo&apos;shish</span>
                                   </button>
 
@@ -947,7 +975,7 @@ export default function StudentDashboardPage() {
                                       setPreviewUrls([]);
                                       if (fileInputRef.current) fileInputRef.current.value = "";
                                     }}
-                                    className="text-xs text-rose-500 hover:text-rose-600 cursor-pointer"
+                                    className="text-xs font-medium text-rose-500 hover:text-rose-600 cursor-pointer"
                                   >
                                     Barchasini tozalash
                                   </button>
@@ -956,28 +984,28 @@ export default function StudentDashboardPage() {
                             ) : (
                               <div
                                 onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer transition-all bg-white"
+                                className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-white hover:bg-blue-50/40 rounded-2xl p-7 text-center cursor-pointer transition-all group"
                               >
                                 <div className="flex flex-col items-center justify-center space-y-2 py-3">
-                                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
-                                    <UploadCloud className="w-6 h-6" />
+                                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform">
+                                    <UploadCloud className="w-7 h-7" />
                                   </div>
-                                  <div className="text-xs font-semibold text-slate-800">
-                                    Kod suratlarini tanlash uchun bosing (1 ta yoki bir nechta)
+                                  <div className="text-sm font-bold text-slate-800">
+                                    Kod fotosuratlarini tanlash uchun bosing (Hohlagancha ko&apos;p rasm)
                                   </div>
-                                  <p className="text-[11px] text-slate-400">
-                                    Kompyuter ekrani yoki daftardagi kod suratlari (PNG, JPG, WEBP, HEIC)
+                                  <p className="text-xs text-slate-500">
+                                    Kompyuter ekrani yoki daftardagi kod suratlari (PNG, JPG, WEBP, HEIC va barchasi)
                                   </p>
                                 </div>
                               </div>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-end gap-3 pt-2">
+                          <div className="flex items-center justify-end gap-3 pt-3">
                             <button
                               type="button"
                               onClick={() => setActiveUploadHwId(null)}
-                              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                              className="px-5 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
                             >
                               Bekor qilish
                             </button>
@@ -985,14 +1013,17 @@ export default function StudentDashboardPage() {
                               type="button"
                               disabled={uploading || selectedFiles.length === 0}
                               onClick={() => handleUploadSubmit(hw.id, hw.title)}
-                              className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                              className="py-3 px-8 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white text-sm font-bold shadow-xl shadow-emerald-500/25 border border-emerald-400/30 flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] ring-4 ring-emerald-500/10"
                             >
                               {uploading ? (
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  <span>Yuklanmoqda...</span>
+                                </div>
                               ) : (
                                 <>
                                   <UploadCloud className="w-4 h-4" />
-                                  <span>Ustozga topshirish</span>
+                                  <span>Ustozga topshirish ({selectedFiles.length} ta rasm)</span>
                                 </>
                               )}
                             </button>
@@ -1008,30 +1039,14 @@ export default function StudentDashboardPage() {
         </div>
       </main>
 
-      {/* Zoom Modal */}
-      {zoomedImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
-          onClick={() => setZoomedImage(null)}
-        >
-          <button
-            onClick={() => setZoomedImage(null)}
-            className="absolute top-6 right-6 p-2.5 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <div
-            className="relative max-w-5xl max-h-[85vh] flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={zoomedImage}
-              alt="Zoomed preview"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
-            />
-          </div>
-        </div>
+      {/* Enhanced Zoom Modal */}
+      {zoomModal && (
+        <EnhancedZoomModal
+          images={zoomModal.images}
+          initialIndex={zoomModal.index}
+          title={zoomModal.title}
+          onClose={() => setZoomModal(null)}
+        />
       )}
 
       {/* Floating Group Chat Button */}
