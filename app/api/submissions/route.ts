@@ -42,9 +42,12 @@ export async function GET(request: Request) {
 
       const enriched = studentSubmissions.map((s) => {
         let parsedUrls: string[] = [];
-        if (s.imageUrls) {
+        if (Array.isArray(s.imageUrls)) {
+          parsedUrls = s.imageUrls;
+        } else if (typeof s.imageUrls === "string" && s.imageUrls.trim()) {
           try {
-            parsedUrls = JSON.parse(s.imageUrls);
+            const p = JSON.parse(s.imageUrls);
+            if (Array.isArray(p)) parsedUrls = p;
           } catch {
             parsedUrls = [];
           }
@@ -112,9 +115,12 @@ export async function GET(request: Request) {
 
       const enriched = filtered.map((s) => {
         let parsedUrls: string[] = [];
-        if (s.imageUrls) {
+        if (Array.isArray(s.imageUrls)) {
+          parsedUrls = s.imageUrls;
+        } else if (typeof s.imageUrls === "string" && s.imageUrls.trim()) {
           try {
-            parsedUrls = JSON.parse(s.imageUrls);
+            const p = JSON.parse(s.imageUrls);
+            if (Array.isArray(p)) parsedUrls = p;
           } catch {
             parsedUrls = [];
           }
