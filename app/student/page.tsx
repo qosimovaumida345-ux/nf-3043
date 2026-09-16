@@ -25,8 +25,8 @@ import {
   Volume2,
   BellRing,
   Plus,
+  Clipboard,
 } from "lucide-react";
-import { playNotificationSound, playSuccessSound } from "@/lib/sound";
 import ImageCarousel from "@/components/ImageCarousel";
 import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 
@@ -138,8 +138,7 @@ export default function StudentDashboardPage() {
           if (isMounted) {
             const msgs: ChatMessage[] = data.messages || [];
             if (silent && msgs.length > lastMsgCountRef.current) {
-              // Yangi xabar kelganda bildirishnoma ovozi
-              playNotificationSound();
+              // Yangi xabar keldi (ovozsiz)
             }
             lastMsgCountRef.current = msgs.length;
             setChatMessages(msgs);
@@ -183,7 +182,6 @@ export default function StudentDashboardPage() {
         const data = await res.json();
         setChatMessages((prev) => [...prev, data.message]);
         setChatText("");
-        playSuccessSound();
         setTimeout(() => {
           chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
         }, 80);
@@ -286,6 +284,107 @@ export default function StudentDashboardPage() {
   const handleRemoveFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Clipboard (Ctrl+V) orqali rasm qabul qilish
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA") &&
+        activeEl !== fileInputRef.current
+      ) {
+        const hasText = e.clipboardData?.getData("text/plain");
+        if (hasText) return;
+      }
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const pastedImages: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const ext = item.type.split("/")[1]?.replace("+xml", "") || "png";
+            const file = new File(
+              [blob],
+              `clipboard-${Date.now()}-${i + 1}.${ext}`,
+              { type: item.type }
+            );
+            pastedImages.push(file);
+          }
+        }
+      }
+
+      if (pastedImages.length > 0) {
+        e.preventDefault();
+
+        // Agar drawer ochilmagan bo'lsa, birinchi faol topshiriqni ochamiz
+        setActiveUploadHwId((current) => {
+          if (current) return current;
+          const firstSubmittable = homeworks.find(
+            (h) => h.canSubmit && !h.isPending
+          );
+          return firstSubmittable ? firstSubmittable.id : null;
+        });
+
+        setSelectedFiles((prev) => [...prev, ...pastedImages]);
+        const newUrls = pastedImages.map((f) => URL.createObjectURL(f));
+        setPreviewUrls((prev) => [...prev, ...newUrls]);
+        setUploadError(null);
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => {
+      window.removeEventListener("paste", handleGlobalPaste);
+    };
+  }, [homeworks]);
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        setUploadError(
+          "Brauzeringiz clipboard tugmasini to'g'ridan-to'g'ri o'qiy olmaydi. Iltimos, klaviaturada Ctrl+V bosing!"
+        );
+        return;
+      }
+      const clipboardItems = await navigator.clipboard.read();
+      const imageFiles: File[] = [];
+
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
+        const imageType = item.types.find((t) => t.startsWith("image/"));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split("/")[1]?.replace("+xml", "") || "png";
+          const file = new File(
+            [blob],
+            `clipboard-${Date.now()}-${i + 1}.${ext}`,
+            { type: imageType }
+          );
+          imageFiles.push(file);
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        setSelectedFiles((prev) => [...prev, ...imageFiles]);
+        const newUrls = imageFiles.map((f) => URL.createObjectURL(f));
+        setPreviewUrls((prev) => [...prev, ...newUrls]);
+        setUploadError(null);
+      } else {
+        setUploadError(
+          "Clipboard'da rasm topilmadi. Avval kodingiz skrinshotini oling (masalan Win+Shift+S) yoki nusxalang."
+        );
+      }
+    } catch {
+      setUploadError(
+        "Clipboard'dan rasm olish uchun ruxsat berilmadi yoki klaviaturada to'g'ridan-to'g'ri Ctrl+V bosing."
+      );
+    }
   };
 
   const handleUploadSubmit = async (hwId: string, hwTitle: string) => {
@@ -958,15 +1057,27 @@ export default function StudentDashboardPage() {
                                   ))}
                                 </div>
 
-                                <div className="flex items-center justify-between pt-3 border-t border-slate-200/60">
-                                  <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                                  >
-                                    <Plus className="w-4 h-4" />
-                                    <span>Yana rasm qo&apos;shish</span>
-                                  </button>
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200/60">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => fileInputRef.current?.click()}
+                                      className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                      <span>Fayldan qo&apos;shish</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={handlePasteFromClipboard}
+                                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-indigo-50 cursor-pointer transition-colors bg-indigo-50/50 border border-indigo-200/60"
+                                      title="Kopiya qilingan skrinshotni joylash"
+                                    >
+                                      <Clipboard className="w-3.5 h-3.5" />
+                                      <span>Clipboard&apos;dan joylash (Ctrl+V)</span>
+                                    </button>
+                                  </div>
 
                                   <button
                                     type="button"
@@ -984,18 +1095,36 @@ export default function StudentDashboardPage() {
                             ) : (
                               <div
                                 onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-white hover:bg-blue-50/40 rounded-2xl p-7 text-center cursor-pointer transition-all group"
+                                className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-white hover:bg-blue-50/40 rounded-2xl p-7 text-center cursor-pointer transition-all group relative"
                               >
-                                <div className="flex flex-col items-center justify-center space-y-2 py-3">
+                                <div className="flex flex-col items-center justify-center space-y-2 py-2">
                                   <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform">
                                     <UploadCloud className="w-7 h-7" />
                                   </div>
                                   <div className="text-sm font-bold text-slate-800">
-                                    Kod fotosuratlarini tanlash uchun bosing (Hohlagancha ko&apos;p rasm)
+                                    Kod fotosuratlarini tanlash uchun bosing
                                   </div>
                                   <p className="text-xs text-slate-500">
-                                    Kompyuter ekrani yoki daftardagi kod suratlari (PNG, JPG, WEBP, HEIC va barchasi)
+                                    Kompyuter ekrani yoki daftardagi kod suratlari (PNG, JPG, WEBP va barchasi)
                                   </p>
+
+                                  {/* Clipboard Ctrl+V ko'rsatmasi va tugmasi */}
+                                  <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePasteFromClipboard();
+                                      }}
+                                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer"
+                                    >
+                                      <Clipboard className="w-3.5 h-3.5" />
+                                      <span>Clipboard&apos;dan joylash (Ctrl + V)</span>
+                                    </button>
+                                    <span className="text-xs text-slate-400 font-medium">
+                                      yoki to&apos;g&apos;ridan-to&apos;g&apos;ri Ctrl+V bosing
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             )}

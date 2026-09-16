@@ -19,6 +19,7 @@ import {
   Clock,
   Bell,
   AlertTriangle,
+  Clipboard,
 } from "lucide-react";
 import ImageCarousel from "@/components/ImageCarousel";
 import EnhancedZoomModal from "@/components/EnhancedZoomModal";
@@ -125,6 +126,88 @@ export default function AdminHomeworksPage() {
   const handleRemoveFile = (index: number) => {
     setSampleFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Clipboard (Ctrl+V) orqali namuna rasmlarini joylash
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA") &&
+        activeEl !== fileInputRef.current
+      ) {
+        const hasText = e.clipboardData?.getData("text/plain");
+        if (hasText) return;
+      }
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const pastedImages: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const ext = item.type.split("/")[1]?.replace("+xml", "") || "png";
+            const file = new File(
+              [blob],
+              `namuna-skrinshot-${Date.now()}-${i + 1}.${ext}`,
+              { type: item.type }
+            );
+            pastedImages.push(file);
+          }
+        }
+      }
+
+      if (pastedImages.length > 0) {
+        e.preventDefault();
+        setSampleFiles((prev) => [...prev, ...pastedImages]);
+        const newUrls = pastedImages.map((f) => URL.createObjectURL(f));
+        setPreviewUrls((prev) => [...prev, ...newUrls]);
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, []);
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        setError("Brauzeringiz clipboard tugmasini to'g'ridan-to'g'ri o'qiy olmaydi. Iltimos, klaviaturada Ctrl+V bosing!");
+        return;
+      }
+      const clipboardItems = await navigator.clipboard.read();
+      const imageFiles: File[] = [];
+
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
+        const imageType = item.types.find((t) => t.startsWith("image/"));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split("/")[1]?.replace("+xml", "") || "png";
+          const file = new File(
+            [blob],
+            `namuna-${Date.now()}-${i + 1}.${ext}`,
+            { type: imageType }
+          );
+          imageFiles.push(file);
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        setSampleFiles((prev) => [...prev, ...imageFiles]);
+        const newUrls = imageFiles.map((f) => URL.createObjectURL(f));
+        setPreviewUrls((prev) => [...prev, ...newUrls]);
+        setError(null);
+      } else {
+        setError("Clipboard'da rasm topilmadi. Avval rasmni nusxalang (masalan Win+Shift+S orqali).");
+      }
+    } catch {
+      setError("Clipboard'dan rasm olish uchun ruxsat berilmadi yoki klaviaturada to'g'ridan-to'g'ri Ctrl+V bosing.");
+    }
   };
 
   const handleCreateHomework = async (e: React.FormEvent) => {
@@ -442,15 +525,26 @@ export default function AdminHomeworksPage() {
                         ))}
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Yana rasm qo&apos;shish</span>
-                        </button>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Fayldan qo&apos;shish</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handlePasteFromClipboard}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-indigo-50/60 px-2 py-0.5 rounded-lg border border-indigo-200/50"
+                          >
+                            <Clipboard className="w-3.5 h-3.5" />
+                            <span>Clipboard&apos;dan (Ctrl+V)</span>
+                          </button>
+                        </div>
 
                         <button
                           type="button"
@@ -476,8 +570,21 @@ export default function AdminHomeworksPage() {
                           Namuna rasmlarni tanlash (1 ta yoki bir nechta)
                         </span>
                         <span className="text-[11px] text-slate-400">
-                          Bir vaqtda bir nechta rasm belgilashingiz mumkin (PNG, JPG, WEBP va barcha formatlar)
+                          Fayl tanlash yoki skrinshotni bevosita Ctrl+V orqali joylash mumkin
                         </span>
+                        <div className="pt-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePasteFromClipboard();
+                            }}
+                            className="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 border border-indigo-200/60 cursor-pointer transition-colors"
+                          >
+                            <Clipboard className="w-3.5 h-3.5" />
+                            <span>Clipboard&apos;dan joylash (Ctrl + V)</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

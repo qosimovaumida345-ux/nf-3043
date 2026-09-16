@@ -32,7 +32,6 @@ import {
   Copy,
   Layers,
 } from "lucide-react";
-import { playNotificationSound, playSuccessSound } from "@/lib/sound";
 import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 
 interface Submission {
@@ -83,13 +82,6 @@ interface HomeworkOption {
   deadline?: string | null;
 }
 
-interface LiveNotification {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-}
-
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: string; username: string; role: string; fullName: string } | null>(null);
@@ -112,8 +104,6 @@ export default function AdminDashboardPage() {
     Record<string, { feedbackText: string; verdict: "CORRECT" | "INCORRECT" | "RETRY"; saving?: boolean }>
   >({});
 
-  // Jonli bildirishnomalar
-  const [liveAlerts, setLiveAlerts] = useState<LiveNotification[]>([]);
   const [sseConnected, setSseConnected] = useState(false);
 
   // Eski urinishlar tarixi (Akkordeon)
@@ -217,17 +207,6 @@ export default function AdminDashboardPage() {
       eventSource.addEventListener("new-submission", (event) => {
         const payload = JSON.parse(event.data);
 
-        playNotificationSound();
-
-        const newAlert: LiveNotification = {
-          id: Math.random().toString(36).substring(2, 9),
-          title: "Yangi kod topshirig'i!",
-          message: `${payload.studentName} (@${payload.studentId}) hozirgina yangi kod yukladi.`,
-          time: new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
-        };
-
-        setLiveAlerts((prev) => [newAlert, ...prev.slice(0, 4)]);
-
         let incomingUrls: string[] = [];
         if (Array.isArray(payload.imageUrls) && payload.imageUrls.length > 0) {
           incomingUrls = payload.imageUrls;
@@ -298,8 +277,6 @@ export default function AdminDashboardPage() {
         throw new Error("Sharhni saqlab bo'lmadi.");
       }
 
-      playSuccessSound();
-
       setSubmissions((prev) =>
         prev.map((s) =>
           s.id === submissionId
@@ -316,14 +293,6 @@ export default function AdminDashboardPage() {
             : s
         )
       );
-
-      const reviewAlert: LiveNotification = {
-        id: Math.random().toString(36).substring(2, 9),
-        title: "Topshiriq baholandi!",
-        message: `Topshiriq "${verdict === "CORRECT" ? "To'g'ri" : verdict === "INCORRECT" ? "Xato" : "Qayta topshirish"}" deb belgilandi.`,
-        time: new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
-      };
-      setLiveAlerts((prev) => [reviewAlert, ...prev.slice(0, 4)]);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       alert(errorMessage);
@@ -572,39 +541,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </header>
-
-      {/* Floating Live Real-Time Alerts */}
-      {liveAlerts.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-50 space-y-2 max-w-sm w-full animate-slide-up">
-          {liveAlerts.map((alert) => (
-            <div
-              key={alert.id}
-              className="p-4 rounded-2xl bg-white border border-blue-200 shadow-2xl flex items-start gap-3 relative"
-              style={{
-                background: "rgba(255, 255, 255, 0.95)",
-                backdropFilter: "blur(20px)",
-              }}
-            >
-              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                <Bell className="w-4 h-4 animate-bounce" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900">{alert.title}</h4>
-                  <span className="text-[10px] text-slate-400">{alert.time}</span>
-                </div>
-                <p className="text-xs text-slate-600 mt-0.5">{alert.message}</p>
-              </div>
-              <button
-                onClick={() => setLiveAlerts((prev) => prev.filter((a) => a.id !== alert.id))}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
         {/* KPI Stats Bar: Guruh o'quvchilari, Yuklaganlar va Yuklamaganlar */}
