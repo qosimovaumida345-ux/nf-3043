@@ -24,12 +24,14 @@ export async function GET(request: Request) {
           homeworkTitle: homeworks.title,
           imageUrl: submissions.imageUrl,
           imageUrls: submissions.imageUrls,
+          codeSnippet: submissions.codeSnippet,
           taskTitle: submissions.taskTitle,
           status: submissions.status,
           submittedAt: submissions.submittedAt,
           comment: {
             id: reviewComments.id,
             feedbackText: reviewComments.feedbackText,
+            voiceUrl: reviewComments.voiceUrl,
             verdict: reviewComments.verdict,
             createdAt: reviewComments.createdAt,
           },
@@ -83,12 +85,14 @@ export async function GET(request: Request) {
           studentGroupName: groups.name,
           imageUrl: submissions.imageUrl,
           imageUrls: submissions.imageUrls,
+          codeSnippet: submissions.codeSnippet,
           taskTitle: submissions.taskTitle,
           status: submissions.status,
           submittedAt: submissions.submittedAt,
           comment: {
             id: reviewComments.id,
             feedbackText: reviewComments.feedbackText,
+            voiceUrl: reviewComments.voiceUrl,
             verdict: reviewComments.verdict,
             createdAt: reviewComments.createdAt,
           },
@@ -156,7 +160,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { homeworkId, imageUrl, imageUrls, storageKey, taskTitle } = body;
+    const { homeworkId, imageUrl, imageUrls, storageKey, taskTitle, codeSnippet } = body;
 
     let finalUrls: string[] = [];
     if (Array.isArray(imageUrls) && imageUrls.length > 0) {
@@ -217,6 +221,7 @@ export async function POST(request: Request) {
           .set({
             imageUrl: primaryImageUrl,
             imageUrls: imageUrlsJson,
+            codeSnippet: codeSnippet || prev.codeSnippet || null,
             storageKey: storageKey || null,
             taskTitle: taskTitle || prev.taskTitle,
             status: "PENDING",
@@ -282,6 +287,7 @@ export async function POST(request: Request) {
       homeworkId: homeworkId || null,
       imageUrl: primaryImageUrl,
       imageUrls: imageUrlsJson,
+      codeSnippet: codeSnippet || null,
       storageKey: storageKey || null,
       taskTitle: taskTitle || "Uy ishi topshirig'i",
       status: "PENDING",

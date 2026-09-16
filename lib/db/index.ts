@@ -139,6 +139,12 @@ export async function ensureDatabaseReady() {
       console.warn("submissions.image_urls migration notice:", e);
     }
 
+    try {
+      await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS code_snippet TEXT`;
+    } catch (e) {
+      console.warn("submissions.code_snippet migration notice:", e);
+    }
+
     // uploaded_files jadvali (Doimiy PostgreSQL rasm ombori - git yoki konteynerga bog'liq emas!)
     await sql`
       CREATE TABLE IF NOT EXISTS uploaded_files (
@@ -167,6 +173,12 @@ export async function ensureDatabaseReady() {
       await sql`ALTER TABLE review_comments ALTER COLUMN feedback_text DROP NOT NULL`;
     } catch (e) {
       console.warn("review_comments.feedback_text migration notice:", e);
+    }
+
+    try {
+      await sql`ALTER TABLE review_comments ADD COLUMN IF NOT EXISTS voice_url TEXT`;
+    } catch (e) {
+      console.warn("review_comments.voice_url migration notice:", e);
     }
 
     // 6. notifications jadvali

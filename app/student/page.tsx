@@ -33,6 +33,7 @@ import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 interface Comment {
   id: string;
   feedbackText: string;
+  voiceUrl?: string | null;
   verdict: string;
   createdAt: string;
 }
@@ -92,6 +93,7 @@ export default function StudentDashboardPage() {
   const [activeUploadHwId, setActiveUploadHwId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [codeText, setCodeText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -434,6 +436,7 @@ export default function StudentDashboardPage() {
           homeworkId: hwId,
           imageUrl: imageUrls[0],
           imageUrls,
+          codeSnippet: codeText.trim() || undefined,
           taskTitle: hwTitle,
         }),
       });
@@ -446,6 +449,7 @@ export default function StudentDashboardPage() {
       // OVOZSIZ VA TOASTSIZ: bevosita holatni tozalash va panelni yopish
       setSelectedFiles([]);
       setPreviewUrls([]);
+      setCodeText("");
       setActiveUploadHwId(null);
 
       await fetchSessionAndHomeworks();
@@ -884,8 +888,19 @@ export default function StudentDashboardPage() {
                             </div>
 
                             {sub.comment && (
-                              <div className="p-3.5 rounded-xl bg-white/80 border border-emerald-100 text-xs text-slate-800 font-medium leading-relaxed">
-                                Ustoz izohi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                              <div className="space-y-2">
+                                <div className="p-3.5 rounded-xl bg-white/80 border border-emerald-100 text-xs text-slate-800 font-medium leading-relaxed">
+                                  Ustoz izohi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                                </div>
+                                {sub.comment.voiceUrl && (
+                                  <div className="p-3 bg-white/90 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                                      <Volume2 className="w-4 h-4 text-emerald-600" />
+                                      <span>Ustoz ovozli tushuntirishi:</span>
+                                    </div>
+                                    <audio controls src={sub.comment.voiceUrl} className="h-8 max-w-full" />
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -930,8 +945,19 @@ export default function StudentDashboardPage() {
                             </div>
 
                             {sub.comment && (
-                              <div className="p-3.5 rounded-xl bg-white/90 border border-rose-100 text-xs text-rose-900 font-medium leading-relaxed">
-                                Ustoz kamchiliklarni ko&apos;rsatdi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                              <div className="space-y-2">
+                                <div className="p-3.5 rounded-xl bg-white/90 border border-rose-100 text-xs text-rose-900 font-medium leading-relaxed">
+                                  Ustoz kamchiliklarni ko&apos;rsatdi: &ldquo;{sub.comment.feedbackText}&rdquo;
+                                </div>
+                                {sub.comment.voiceUrl && (
+                                  <div className="p-3 bg-white/90 rounded-xl border border-rose-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-rose-900">
+                                      <Volume2 className="w-4 h-4 text-purple-600" />
+                                      <span>Ustoz ovozli sharhi:</span>
+                                    </div>
+                                    <audio controls src={sub.comment.voiceUrl} className="h-8 max-w-full" />
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -1128,6 +1154,20 @@ export default function StudentDashboardPage() {
                                 </div>
                               </div>
                             )}
+                          </div>
+
+                          {/* Qo'shimcha Kod Matni (Ixtiyoriy) */}
+                          <div className="space-y-1.5 pt-1">
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                              Kodingiz matni (ixtiyoriy, qo&apos;shimcha nusxa):
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={codeText}
+                              onChange={(e) => setCodeText(e.target.value)}
+                              placeholder="HTML, CSS yoki JS kodingizni shu yerga ham nusxalab qo'yishingiz mumkin..."
+                              className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                            />
                           </div>
 
                           <div className="flex items-center justify-end gap-3 pt-3">

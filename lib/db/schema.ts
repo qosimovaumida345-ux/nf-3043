@@ -42,6 +42,7 @@ export const submissions = pgTable("submissions", {
   storageKey: text("storage_key"),
   taskTitle: text("task_title").default("Kundalik kod topshirig'i"),
   status: varchar("status", { length: 20 }).notNull().default("PENDING"), // 'PENDING' | 'CORRECT' | 'INCORRECT' | 'RETRY'
+  codeSnippet: text("code_snippet"), // Matn ko'rinishidagi kod (ixtiyoriy)
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -51,6 +52,7 @@ export const reviewComments = pgTable("review_comments", {
   submissionId: text("submission_id").notNull().references(() => submissions.id, { onDelete: "cascade" }),
   adminId: text("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   feedbackText: text("feedback_text").default(""),
+  voiceUrl: text("voice_url"), // O'qituvchi ovozli sharhi (audio url yoki base64)
   verdict: varchar("verdict", { length: 20 }).notNull().default("CORRECT"), // 'CORRECT' | 'INCORRECT' | 'RETRY'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

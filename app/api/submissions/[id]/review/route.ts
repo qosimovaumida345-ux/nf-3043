@@ -16,7 +16,7 @@ export async function POST(
 
     const { id: submissionId } = await context.params;
     const body = await request.json();
-    const { feedbackText, verdict } = body;
+    const { feedbackText, verdict, voiceUrl } = body;
 
     if (!verdict) {
       return NextResponse.json(
@@ -63,6 +63,7 @@ export async function POST(
         .update(reviewComments)
         .set({
           feedbackText: cleanFeedback,
+          voiceUrl: voiceUrl !== undefined ? voiceUrl : existingReview[0].voiceUrl,
           verdict,
           updatedAt: now,
         })
@@ -73,6 +74,7 @@ export async function POST(
         submissionId,
         adminId: session.id,
         feedbackText: cleanFeedback,
+        voiceUrl: voiceUrl || null,
         verdict,
         createdAt: now,
         updatedAt: now,

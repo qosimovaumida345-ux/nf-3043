@@ -45,3 +45,4 @@ next-env.d.ts
 # uploads (never track user/admin uploaded files in git)
 /public/uploads/
 
+/scratch*

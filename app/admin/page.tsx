@@ -31,8 +31,22 @@ import {
   Search,
   Copy,
   Layers,
+  Sparkles,
+  Play,
+  GitCompare,
+  Mic,
+  Download,
+  Cpu,
+  Zap,
+  Code2,
 } from "lucide-react";
 import EnhancedZoomModal from "@/components/EnhancedZoomModal";
+import AIReviewModal from "@/components/AIReviewModal";
+import CodeSandboxModal from "@/components/CodeSandboxModal";
+import DiffViewerModal from "@/components/DiffViewerModal";
+import AIModelManagerModal from "@/components/AIModelManagerModal";
+import VoiceFeedbackRecorder from "@/components/VoiceFeedbackRecorder";
+import { AIReviewResult } from "@/lib/openrouter";
 
 interface Submission {
   id: string;
@@ -45,12 +59,14 @@ interface Submission {
   studentGroupName?: string | null;
   imageUrl: string;
   imageUrls?: string[] | string | null;
+  codeSnippet?: string | null;
   taskTitle: string;
   status: "PENDING" | "CORRECT" | "INCORRECT" | "RETRY";
   submittedAt: string;
   comment?: {
     id: string;
     feedbackText: string;
+    voiceUrl?: string | null;
     verdict: string;
     createdAt: string;
   } | null;
@@ -118,6 +134,36 @@ export default function AdminDashboardPage() {
 
   // Nusxa olinganlik xabari
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // OpenRouter AI & Yangi Imkoniyatlar State lari
+  const [currentAIModel, setCurrentAIModel] = useState<string>("inclusionai/ling-3.0-flash-vl:free");
+  const [aiModelModalOpen, setAiModelModalOpen] = useState(false);
+
+  // AI Review Modal
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiReview, setAiReview] = useState<AIReviewResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiActiveSubId, setAiActiveSubId] = useState<string | null>(null);
+  const [aiStudentName, setAiStudentName] = useState("");
+  const [aiTaskTitle, setAiTaskTitle] = useState("");
+
+  // Live Code Sandbox Modal
+  const [sandboxModalOpen, setSandboxModalOpen] = useState(false);
+  const [sandboxCode, setSandboxCode] = useState("");
+  const [sandboxTitle, setSandboxTitle] = useState("Live Kod Sandbox");
+
+  // Diff Viewer Modal
+  const [diffModalOpen, setDiffModalOpen] = useState(false);
+  const [diffStudentName, setDiffStudentName] = useState("");
+  const [diffTaskTitle, setDiffTaskTitle] = useState("");
+  const [diffCurrentAttempt, setDiffCurrentAttempt] = useState<any>(null);
+  const [diffPreviousAttempts, setDiffPreviousAttempts] = useState<any[]>([]);
+
+  // Ovozli sharhlar (voiceNotes): [submissionId]: audioBase64String | null
+  const [voiceNotes, setVoiceNotes] = useState<Record<string, string | null>>({});
+
+  // OCR yuklanish holati: [submissionId]: boolean
+  const [ocrLoading, setOcrLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchData();
@@ -257,6 +303,7 @@ export default function AdminDashboardPage() {
     };
     const verdict = draft.verdict || "CORRECT";
     const feedbackText = draft.feedbackText ? draft.feedbackText.trim() : "";
+    const voiceUrl = voiceNotes[submissionId];
 
     setReviewDrafts((prev) => ({
       ...prev,
@@ -270,6 +317,7 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({
           feedbackText,
           verdict,
+          voiceUrl: voiceUrl !== undefined ? voiceUrl : undefined,
         }),
       });
 
@@ -286,6 +334,7 @@ export default function AdminDashboardPage() {
                 comment: {
                   id: "temp",
                   feedbackText,
+                  voiceUrl: voiceUrl || s.comment?.voiceUrl,
                   verdict,
                   createdAt: new Date().toISOString(),
                 },
@@ -302,6 +351,131 @@ export default function AdminDashboardPage() {
         [submissionId]: { ...prev[submissionId], saving: false },
       }));
     }
+  };
+
+  // 1. AI bilan tekshirish (OpenRouter Vision / Text)
+  const handleAICheck = async (sub: Submission, card: any) => {
+    setAiActiveSubId(sub.id);
+    setAiStudentName(card.studentName);
+    setAiTaskTitle(card.taskTitle);
+    setAiReview(null);
+    setAiLoading(true);
+    setAiModalOpen(true);
+
+    try {
+      const res = await fetch("/api/ai/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrls: card.images,
+          codeSnippet: sub.codeSnippet,
+          taskTitle: card.taskTitle,
+          studentName: card.studentName,
+          model: currentAIModel,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "AI tahlilida xatolik yuz berdi.");
+      }
+
+      setAiReview(data.review);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "AI bilan bog'lanishda xatolik";
+      alert(msg);
+      setAiModalOpen(false);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI sharhini formaga qo'yish
+  const handleApplyFeedbackFromAI = (
+    feedbackText: string,
+    verdict: "CORRECT" | "INCORRECT" | "RETRY"
+  ) => {
+    if (!aiActiveSubId) return;
+    setReviewDrafts((prev) => ({
+      ...prev,
+      [aiActiveSubId]: {
+        ...prev[aiActiveSubId],
+        feedbackText,
+        verdict,
+      },
+    }));
+  };
+
+  // 2. OCR - Skrinshotdan kodni ajratish
+  const handleOCR = async (sub: Submission, card: any) => {
+    setOcrLoading((prev) => ({ ...prev, [sub.id]: true }));
+    try {
+      const res = await fetch("/api/ai/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrls: card.images,
+          model: currentAIModel,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Kodni ajratishda xatolik yuz berdi.");
+      }
+
+      setSandboxCode(data.result.code);
+      setSandboxTitle(`${card.studentName} — Ajratilgan Kod (${data.result.language})`);
+      setSandboxModalOpen(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "OCR da xatolik";
+      alert(msg);
+    } finally {
+      setOcrLoading((prev) => ({ ...prev, [sub.id]: false }));
+    }
+  };
+
+  // 3. Diff Viewer - Eski va yangi urinishlarni solishtirish
+  const handleOpenDiff = (card: any) => {
+    setDiffStudentName(card.studentName);
+    setDiffTaskTitle(card.taskTitle);
+    setDiffCurrentAttempt({
+      id: card.latest.id,
+      submittedAt: card.latest.submittedAt,
+      status: card.latest.status,
+      imageUrls: card.images,
+      comment: card.latest.comment,
+    });
+
+    const parsedPrev = card.previousAttempts.map((att: any) => {
+      let pImgs: string[] = [];
+      if (Array.isArray(att.imageUrls)) pImgs = att.imageUrls;
+      else if (typeof att.imageUrls === "string" && att.imageUrls.trim()) {
+        try {
+          const parsed = JSON.parse(att.imageUrls);
+          if (Array.isArray(parsed)) pImgs = parsed;
+        } catch {
+          pImgs = [];
+        }
+      }
+      if (pImgs.length === 0 && att.imageUrl) pImgs = [att.imageUrl];
+
+      return {
+        id: att.id,
+        submittedAt: att.submittedAt,
+        status: att.status,
+        imageUrls: pImgs,
+        comment: att.comment,
+      };
+    });
+
+    setDiffPreviousAttempts(parsedPrev);
+    setDiffModalOpen(true);
+  };
+
+  // 4. Hisobotni CSV yuklab olish
+  const handleDownloadReport = () => {
+    const url = `/api/admin/reports?groupId=${encodeURIComponent(selectedGroup)}`;
+    window.open(url, "_blank");
   };
 
   const handleLogout = async () => {
@@ -514,7 +688,34 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* OpenRouter AI Model Switcher Button */}
+            <button
+              type="button"
+              onClick={() => setAiModelModalOpen(true)}
+              className="hidden lg:flex items-center gap-2 px-3 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl transition-all shadow-xs cursor-pointer"
+              title="OpenRouter bepul AI modellari"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="font-mono text-[11px] truncate max-w-[150px]">
+                {currentAIModel.split("/")[1] || currentAIModel}
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500 text-white font-bold">
+                FREE
+              </span>
+            </button>
+
+            {/* CSV Export Button */}
+            <button
+              type="button"
+              onClick={handleDownloadReport}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-emerald-700 bg-white border border-slate-200 rounded-xl hover:bg-emerald-50 transition-all shadow-xs cursor-pointer"
+              title="Topshiriqlar hisobotini Excel/CSV yuklab olish"
+            >
+              <Download className="w-4 h-4 text-emerald-600" />
+              <span className="hidden md:inline">CSV Hisobot</span>
+            </button>
+
             <Link
               href="/admin/homeworks"
               className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-xs"
@@ -1019,6 +1220,67 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
 
+                      {/* AI & Smart Tools Action Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-blue-50/90 border border-indigo-100 shadow-2xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* 1. AI Review Button */}
+                          <button
+                            type="button"
+                            disabled={aiLoading && aiActiveSubId === sub.id}
+                            onClick={() => handleAICheck(sub, card)}
+                            className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {aiLoading && aiActiveSubId === sub.id ? (
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            )}
+                            <span>🧠 AI Tekshirish</span>
+                          </button>
+
+                          {/* 2. OCR Code Extract Button */}
+                          <button
+                            type="button"
+                            disabled={ocrLoading[sub.id]}
+                            onClick={() => handleOCR(sub, card)}
+                            className="py-2 px-3.5 rounded-xl bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-2xs"
+                          >
+                            {ocrLoading[sub.id] ? (
+                              <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Zap className="w-3.5 h-3.5 text-amber-600" />
+                            )}
+                            <span>⚡ Kodni ajratish (OCR)</span>
+                          </button>
+
+                          {/* 3. Live Sandbox Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSandboxCode(sub.codeSnippet || "");
+                              setSandboxTitle(`${card.studentName} — ${card.taskTitle}`);
+                              setSandboxModalOpen(true);
+                            }}
+                            className="py-2 px-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600/30" />
+                            <span>▶ Live Sandbox</span>
+                          </button>
+                        </div>
+
+                        {/* 4. Diff Viewer (if previous attempts exist) */}
+                        {card.previousAttempts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDiff(card)}
+                            className="py-2 px-3.5 rounded-xl bg-purple-100 hover:bg-purple-200/90 text-purple-900 border border-purple-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <GitCompare className="w-3.5 h-3.5 text-purple-600" />
+                            <span>🔍 Versiyalar farqi (Diff - {card.previousAttempts.length} ta eski)</span>
+                          </button>
+                        )}
+                      </div>
+
                       {/* Body: Chap tomonda BARCHA YUKLANGAN RASMLAR ALOHIDA-ALOHIDA KO'RINISHDA! */}
                       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Chap tomon: Barcha rasmlar alohida kartochkalar bo'lib ko'rinadi */}
@@ -1233,6 +1495,15 @@ export default function AdminDashboardPage() {
                               placeholder="Koddagi kamchiliklar, xatolar yoki maqtovlarni yozing..."
                               className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400"
                             />
+
+                            {/* Voice Feedback Recorder */}
+                            <div className="mt-2.5">
+                              <VoiceFeedbackRecorder
+                                initialVoiceUrl={voiceNotes[sub.id] !== undefined ? voiceNotes[sub.id] : sub.comment?.voiceUrl}
+                                onVoiceRecorded={(url) => setVoiceNotes((prev) => ({ ...prev, [sub.id]: url }))}
+                                disabled={draft.saving}
+                              />
+                            </div>
                           </div>
 
                           {/* Verdict Selector Buttons */}
@@ -1336,6 +1607,53 @@ export default function AdminDashboardPage() {
           onClose={() => setZoomModal(null)}
         />
       )}
+
+      {/* AI Review Modal */}
+      <AIReviewModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        review={aiReview}
+        loading={aiLoading}
+        studentName={aiStudentName}
+        taskTitle={aiTaskTitle}
+        onApplyFeedback={handleApplyFeedbackFromAI}
+        onOpenSandbox={(code) => {
+          setSandboxCode(code);
+          setSandboxTitle(`${aiStudentName} — Kod Sandbox`);
+          setSandboxModalOpen(true);
+        }}
+      />
+
+      {/* Code Sandbox Modal */}
+      <CodeSandboxModal
+        isOpen={sandboxModalOpen}
+        onClose={() => setSandboxModalOpen(false)}
+        initialCode={sandboxCode}
+        title={sandboxTitle}
+      />
+
+      {/* Diff Viewer Modal */}
+      {diffCurrentAttempt && (
+        <DiffViewerModal
+          isOpen={diffModalOpen}
+          onClose={() => setDiffModalOpen(false)}
+          studentName={diffStudentName}
+          taskTitle={diffTaskTitle}
+          currentAttempt={diffCurrentAttempt}
+          previousAttempts={diffPreviousAttempts}
+        />
+      )}
+
+      {/* OpenRouter AI Model Manager Modal */}
+      <AIModelManagerModal
+        isOpen={aiModelModalOpen}
+        onClose={() => setAiModelModalOpen(false)}
+        currentModel={currentAIModel}
+        onSelectModel={(m) => {
+          setCurrentAIModel(m);
+          setAiModelModalOpen(false);
+        }}
+      />
     </div>
   );
 }
