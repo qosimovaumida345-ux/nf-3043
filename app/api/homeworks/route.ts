@@ -111,6 +111,7 @@ export async function GET() {
           comment: {
             id: reviewComments.id,
             feedbackText: reviewComments.feedbackText,
+            voiceUrl: reviewComments.voiceUrl,
             verdict: reviewComments.verdict,
             createdAt: reviewComments.createdAt,
           },
@@ -153,6 +154,7 @@ export async function GET() {
           mySubmission: sub
             ? {
                 ...sub,
+                comment: sub.comment?.id ? sub.comment : null,
                 imageUrls: parsedSubUrls,
               }
             : null,

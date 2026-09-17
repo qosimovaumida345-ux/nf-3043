@@ -39,6 +39,9 @@ import {
   Cpu,
   Zap,
   Code2,
+  Trash2,
+  Edit3,
+  CheckCheck,
 } from "lucide-react";
 import EnhancedZoomModal from "@/components/EnhancedZoomModal";
 import AIReviewModal from "@/components/AIReviewModal";
@@ -107,13 +110,34 @@ export default function AdminDashboardPage() {
   const [homeworks, setHomeworks] = useState<HomeworkOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filtrlar
+  // Filtrlar va Tablar
+  // "PENDING": Tekshirish kutilayotganlar (birlamchi)
+  // "CORRECT": Bajarilgan va to'g'ri deb qabul qilinganlar
+  // "RETRY_INCORRECT": Xato yoki qayta topshirish so'ralganlar
+  // "ALL_SUBMITTED": Barcha yuklanganlar
+  // "NOT_SUBMITTED": Topshirmaganlar
+  const [activeTab, setActiveTab] = useState<
+    "PENDING" | "CORRECT" | "RETRY_INCORRECT" | "ALL_SUBMITTED" | "NOT_SUBMITTED"
+  >("PENDING");
   const [selectedGroup, setSelectedGroup] = useState<string>("ALL");
   const [selectedHomework, setSelectedHomework] = useState<string>("ALL");
-  const [submissionFilter, setSubmissionFilter] = useState<"ALL" | "SUBMITTED" | "NOT_SUBMITTED">("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
   const [selectedStudent, setSelectedStudent] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  // Tahrirlanayotgan sharh ID si (avval tekshirilgan topshiriqni qayta tahrirlash uchun)
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+
+  // Muvaffaqiyatli saqlanganlik bildirishnomasi ID si
+  const [saveSuccessId, setSaveSuccessId] = useState<string | null>(null);
+
+  // O'chirish modali va yuklanish holati
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
+    subId: string;
+    studentName: string;
+    taskTitle: string;
+  } | null>(null);
+  const [deletingSubId, setDeletingSubId] = useState<string | null>(null);
 
   // Sharh draftlari: [submissionId]: { feedbackText, verdict, isSaving }
   const [reviewDrafts, setReviewDrafts] = useState<
@@ -332,9 +356,9 @@ export default function AdminDashboardPage() {
                 ...s,
                 status: verdict,
                 comment: {
-                  id: "temp",
+                  id: s.comment?.id || "temp",
                   feedbackText,
-                  voiceUrl: voiceUrl || s.comment?.voiceUrl,
+                  voiceUrl: voiceUrl !== undefined ? voiceUrl : s.comment?.voiceUrl,
                   verdict,
                   createdAt: new Date().toISOString(),
                 },
@@ -342,6 +366,11 @@ export default function AdminDashboardPage() {
             : s
         )
       );
+
+      // Tahrirlash rejimini yopish va muvaffaqiyat belgisini yoqish
+      setEditingReviewId(null);
+      setSaveSuccessId(submissionId);
+      setTimeout(() => setSaveSuccessId(null), 3500);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       alert(errorMessage);
@@ -350,6 +379,39 @@ export default function AdminDashboardPage() {
         ...prev,
         [submissionId]: { ...prev[submissionId], saving: false },
       }));
+    }
+  };
+
+  // Topshiriqni o'chirish (DELETE)
+  const handleDeleteSubmission = async (submissionId: string) => {
+    setDeletingSubId(submissionId);
+    try {
+      const res = await fetch(`/api/submissions/${submissionId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Topshiriqni o'chirishda xatolik yuz berdi.");
+      }
+
+      // Lokal ro'yxatdan tozalash
+      setSubmissions((prev) => prev.filter((s) => s.id !== submissionId));
+      setReviewDrafts((prev) => {
+        const copy = { ...prev };
+        delete copy[submissionId];
+        return copy;
+      });
+      setVoiceNotes((prev) => {
+        const copy = { ...prev };
+        delete copy[submissionId];
+        return copy;
+      });
+      setConfirmDeleteModal(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Topshiriqni o'chirib bo'lmadi.";
+      alert(msg);
+    } finally {
+      setDeletingSubId(null);
     }
   };
 
@@ -561,8 +623,8 @@ export default function AdminDashboardPage() {
     submittedStudentIds.add(s.studentId);
   });
 
-  // 2. Filtrlangan topshiriq cardlari (YUKLAGANLAR)
-  const filteredSubmittedCards = groupedCards.filter((card) => {
+  // 2. Guruh, uy ishi va qidiruv bo'yicha saralangan baza cardlar
+  const baseCards = groupedCards.filter((card) => {
     // Guruh filtri
     if (selectedGroup !== "ALL") {
       const st = students.find((s) => s.id === card.studentId);
@@ -580,11 +642,6 @@ export default function AdminDashboardPage() {
       return false;
     }
 
-    // Status filtri
-    if (selectedStatus !== "ALL" && card.latest.status !== selectedStatus) {
-      return false;
-    }
-
     // Qidiruv so'zi
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -596,6 +653,13 @@ export default function AdminDashboardPage() {
 
     return true;
   });
+
+  // Holatlar bo'yicha hisoblangan toifalar
+  const pendingCards = baseCards.filter((c) => c.latest.status === "PENDING");
+  const correctCards = baseCards.filter((c) => c.latest.status === "CORRECT");
+  const retryIncorrectCards = baseCards.filter(
+    (c) => c.latest.status === "INCORRECT" || c.latest.status === "RETRY"
+  );
 
   // 3. Topshirmagan o'quvchilar (YUKLAMAGANLAR)
   const unsubmittedStudents = currentGroupStudents.filter((st) => {
@@ -612,6 +676,22 @@ export default function AdminDashboardPage() {
 
     return !submittedStudentIds.has(st.id);
   });
+
+  // Hozirgi tanlangan tab bo'yicha ko'rsatiladigan topshiriqlar
+  let filteredSubmittedCards = baseCards;
+  if (activeTab === "PENDING") {
+    filteredSubmittedCards = pendingCards;
+  } else if (activeTab === "CORRECT") {
+    filteredSubmittedCards = correctCards;
+  } else if (activeTab === "RETRY_INCORRECT") {
+    filteredSubmittedCards = retryIncorrectCards;
+  } else if (activeTab === "ALL_SUBMITTED") {
+    if (selectedStatus !== "ALL") {
+      filteredSubmittedCards = baseCards.filter((c) => c.latest.status === selectedStatus);
+    } else {
+      filteredSubmittedCards = baseCards;
+    }
+  }
 
   // Guruhdagi talabalardan qanchasi topshirdi
   const groupSubmittedCount = currentGroupStudents.filter((st) => submittedStudentIds.has(st.id)).length;
@@ -744,14 +824,20 @@ export default function AdminDashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
-        {/* KPI Stats Bar: Guruh o'quvchilari, Yuklaganlar va Yuklamaganlar */}
+        {/* KPI Stats Bar: Guruh o'quvchilari, Kutilmoqda, Bajarilgan, Yuklamaganlar */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
           {/* Guruhdagi jami talabalar */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform"
+            onClick={() => {
+              setActiveTab("ALL_SUBMITTED");
+              setSelectedStatus("ALL");
+            }}
+            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
+              activeTab === "ALL_SUBMITTED" ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/40" : "border-white/90"
+            }`}
           >
             <div>
               <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -767,26 +853,83 @@ export default function AdminDashboardPage() {
             </div>
           </motion.div>
 
-          {/* YUKLAGANLAR (Topshirganlar) */}
+          {/* KUTILMOQDA (Tekshirish kerak bo'lganlar - Birlamchi) */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            onClick={() => setSubmissionFilter("SUBMITTED")}
+            onClick={() => {
+              setActiveTab("PENDING");
+              setSelectedStatus("ALL");
+            }}
             className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
-              submissionFilter === "SUBMITTED" ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/50" : "border-white/90"
+              activeTab === "PENDING" ? "border-amber-500 ring-2 ring-amber-500/25 bg-amber-50/60" : "border-white/90"
+            }`}
+          >
+            <div>
+              <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">
+                🟡 Kutilmoqda
+              </div>
+              <div className="text-2xl font-fustat font-bold text-amber-700 mt-1">
+                {pendingCards.length}
+              </div>
+              <div className="text-[10px] text-amber-600 mt-0.5 font-medium">Tekshirish kerak</div>
+            </div>
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
+              <Clock className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          {/* BAJARILGAN / TO'G'RI QABUL */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            onClick={() => {
+              setActiveTab("CORRECT");
+              setSelectedStatus("ALL");
+            }}
+            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
+              activeTab === "CORRECT" ? "border-emerald-500 ring-2 ring-emerald-500/25 bg-emerald-50/60" : "border-white/90"
             }`}
           >
             <div>
               <div className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">
-                🟢 Yuklaganlar
+                🟢 Bajarilgan
               </div>
               <div className="text-2xl font-fustat font-bold text-emerald-700 mt-1">
-                {groupSubmittedCount}
+                {correctCards.length}
               </div>
-              <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">Topshiriq yuborgan</div>
+              <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">To&apos;g&apos;ri qabul</div>
             </div>
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          {/* JAMI YUKLAGANLAR (Topshirganlar) */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            onClick={() => {
+              setActiveTab("ALL_SUBMITTED");
+              setSelectedStatus("ALL");
+            }}
+            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
+              activeTab === "ALL_SUBMITTED" ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/50" : "border-white/90"
+            }`}
+          >
+            <div>
+              <div className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">
+                📋 Yuklaganlar
+              </div>
+              <div className="text-2xl font-fustat font-bold text-blue-700 mt-1">
+                {groupSubmittedCount}
+              </div>
+              <div className="text-[10px] text-blue-600 mt-0.5 font-medium">Jami topshirgan</div>
+            </div>
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-500/15 text-blue-600 flex items-center justify-center font-bold">
               <UserCheck className="w-5 h-5" />
             </div>
           </motion.div>
@@ -795,10 +938,12 @@ export default function AdminDashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            onClick={() => setSubmissionFilter("NOT_SUBMITTED")}
-            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
-              submissionFilter === "NOT_SUBMITTED" ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/50" : "border-white/90"
+            transition={{ delay: 0.25 }}
+            onClick={() => {
+              setActiveTab("NOT_SUBMITTED");
+            }}
+            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer col-span-2 sm:col-span-1 ${
+              activeTab === "NOT_SUBMITTED" ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/50" : "border-white/90"
             }`}
           >
             <div>
@@ -814,48 +959,6 @@ export default function AdminDashboardPage() {
               <UserX className="w-5 h-5" />
             </div>
           </motion.div>
-
-          {/* Kutilmoqda (Pending) */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform"
-          >
-            <div>
-              <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">
-                Kutilmoqda
-              </div>
-              <div className="text-2xl font-fustat font-bold text-blue-600 mt-1">
-                {filteredSubmittedCards.filter((c) => c.latest.status === "PENDING").length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Tekshirilmagan</div>
-            </div>
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
-              <Clock className="w-5 h-5" />
-            </div>
-          </motion.div>
-
-          {/* To'g'ri deb qabul qilingan */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-white/90 shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1"
-          >
-            <div>
-              <div className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">
-                To&apos;g&apos;ri Qabul
-              </div>
-              <div className="text-2xl font-fustat font-bold text-emerald-600 mt-1">
-                {filteredSubmittedCards.filter((c) => c.latest.status === "CORRECT").length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Qabul qilingan</div>
-            </div>
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </motion.div>
         </div>
 
         {/* FILTERS SECTION: Guruh, Uy ishi, Yuklagan/Yuklamagan, Status va Qidiruv */}
@@ -867,13 +970,13 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Reset filters button */}
-            {(selectedGroup !== "ALL" || selectedHomework !== "ALL" || submissionFilter !== "ALL" || selectedStatus !== "ALL" || selectedStudent !== "ALL" || searchQuery) && (
+            {(selectedGroup !== "ALL" || selectedHomework !== "ALL" || activeTab !== "PENDING" || selectedStatus !== "ALL" || selectedStudent !== "ALL" || searchQuery) && (
               <button
                 type="button"
                 onClick={() => {
                   setSelectedGroup("ALL");
                   setSelectedHomework("ALL");
-                  setSubmissionFilter("ALL");
+                  setActiveTab("PENDING");
                   setSelectedStatus("ALL");
                   setSelectedStudent("ALL");
                   setSearchQuery("");
@@ -897,7 +1000,7 @@ export default function AdminDashboardPage() {
                 value={selectedGroup}
                 onChange={(e) => {
                   setSelectedGroup(e.target.value);
-                  setSelectedStudent("ALL"); // Guruh o'zgarganda talaba filtrini tozalash
+                  setSelectedStudent("ALL");
                 }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all cursor-pointer"
               >
@@ -930,28 +1033,33 @@ export default function AdminDashboardPage() {
               </select>
             </div>
 
-            {/* 3. YUKLAGAN VA YUKLAMAGANLAR FILTIRI (Asosiy talab!) */}
+            {/* 3. ASOSIY TOIFA TANLASH (Kutilmoqda, Bajarilgan, Barchasi, Yuklamaganlar) */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1">
                 <Layers className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Topshirish Holati:</span>
+                <span>Tekshirish Bo&apos;limi:</span>
               </label>
               <select
-                value={submissionFilter}
-                onChange={(e) => setSubmissionFilter(e.target.value as "ALL" | "SUBMITTED" | "NOT_SUBMITTED")}
+                value={activeTab}
+                onChange={(e) => {
+                  setActiveTab(e.target.value as any);
+                  setSelectedStatus("ALL");
+                }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all cursor-pointer"
               >
-                <option value="ALL">📋 Barchasi (Yuklagan & Yuklamaganlar)</option>
-                <option value="SUBMITTED">🟢 Faqat yuklaganlar ({groupSubmittedCount} ta)</option>
-                <option value="NOT_SUBMITTED">🔴 Faqat yuklamaganlar ({groupUnsubmittedCount} ta)</option>
+                <option value="PENDING">🟡 Tekshirish kerak — Kutilmoqda ({pendingCards.length} ta)</option>
+                <option value="CORRECT">🟢 Bajarilgan — To&apos;g&apos;ri deb qabul qilingan ({correctCards.length} ta)</option>
+                <option value="RETRY_INCORRECT">🟠 Xato yoki qayta topshirish ({retryIncorrectCards.length} ta)</option>
+                <option value="ALL_SUBMITTED">📋 Barcha topshirganlar ({baseCards.length} ta)</option>
+                <option value="NOT_SUBMITTED">🔴 Hali topshirmaganlar ({unsubmittedStudents.length} ta)</option>
               </select>
             </div>
 
-            {/* 4. Tekshiruv statusi (Faqat topshirganlar uchun) */}
+            {/* 4. Tekshiruv statusi */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Tekshiruv Natijasi:</span>
+                <span>Natija filtri:</span>
               </label>
               <select
                 value={selectedStatus}
@@ -959,7 +1067,7 @@ export default function AdminDashboardPage() {
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all cursor-pointer"
               >
                 <option value="ALL">📁 Barcha statuslar</option>
-                <option value="PENDING">🟡 Faqat tekshirilmaganlar (Kutilmoqda)</option>
+                <option value="PENDING">🟡 Faqat kutilayotganlar</option>
                 <option value="CORRECT">🟢 To&apos;g&apos;ri deb baholanganlar</option>
                 <option value="INCORRECT">🔴 Xato deb baholanganlar</option>
                 <option value="RETRY">🟠 Qayta topshirish so&apos;ralganlar</option>
@@ -1006,10 +1114,127 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+        {/* Quick Navigation Segment Tabs */}
+        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-200/60 rounded-2xl">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("PENDING");
+              setSelectedStatus("ALL");
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "PENDING"
+                ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Tekshirish kerak (Kutilmoqda)</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "PENDING" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {pendingCards.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("CORRECT");
+              setSelectedStatus("ALL");
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "CORRECT"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/25 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Bajarilgan / Qabul Qilingan</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "CORRECT" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {correctCards.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("RETRY_INCORRECT");
+              setSelectedStatus("ALL");
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "RETRY_INCORRECT"
+                ? "bg-rose-600 text-white shadow-md shadow-rose-600/25 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            <span>Xato / Qayta topshirish</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "RETRY_INCORRECT" ? "bg-white/25 text-white" : "bg-rose-100 text-rose-800"
+              }`}
+            >
+              {retryIncorrectCards.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("ALL_SUBMITTED");
+              setSelectedStatus("ALL");
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "ALL_SUBMITTED"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Barcha topshirganlar</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "ALL_SUBMITTED" ? "bg-white/25 text-white" : "bg-blue-100 text-blue-800"
+              }`}
+            >
+              {baseCards.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("NOT_SUBMITTED");
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "NOT_SUBMITTED"
+                ? "bg-slate-800 text-white shadow-md shadow-slate-800/25 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <UserX className="w-4 h-4" />
+            <span>Topshirmaganlar</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "NOT_SUBMITTED" ? "bg-white/25 text-white" : "bg-slate-300 text-slate-800"
+              }`}
+            >
+              {unsubmittedStudents.length}
+            </span>
+          </button>
+        </div>
+
         {/* ========================================================= */}
-        {/* YUKLAMAGANLAR BO'LIMI (Agar NOT_SUBMITTED yoki ALL bo'lsa) */}
+        {/* YUKLAMAGANLAR BO'LIMI (Agar NOT_SUBMITTED bo'lsa) */}
         {/* ========================================================= */}
-        {(submissionFilter === "NOT_SUBMITTED" || submissionFilter === "ALL") && (
+        {activeTab === "NOT_SUBMITTED" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -1131,9 +1356,9 @@ export default function AdminDashboardPage() {
         )}
 
         {/* ========================================================= */}
-        {/* YUKLAGANLAR BO'LIMI (Agar SUBMITTED yoki ALL bo'lsa) */}
+        {/* YUKLAGANLAR BO'LIMI (Agar NOT_SUBMITTED bo'lmasa) */}
         {/* ========================================================= */}
-        {(submissionFilter === "SUBMITTED" || submissionFilter === "ALL") && (
+        {activeTab !== "NOT_SUBMITTED" && (
           <div className="space-y-6 pt-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -1477,116 +1702,230 @@ export default function AdminDashboardPage() {
                           )}
                         </div>
 
-                        {/* O'ng tomon: Sharh va Baholash formasi */}
+                        {/* O'ng tomon: Sharh va Baholash formasi / Natija kartochkasi */}
                         <div className="lg:col-span-6 flex flex-col justify-between bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                              O&apos;qituvchi Sharhi va Izohi:
-                            </label>
-                            <textarea
-                              rows={4}
-                              value={draft.feedbackText}
-                              onChange={(e) =>
-                                setReviewDrafts((prev) => ({
-                                  ...prev,
-                                  [sub.id]: { ...draft, feedbackText: e.target.value },
-                                }))
-                              }
-                              placeholder="Koddagi kamchiliklar, xatolar yoki maqtovlarni yozing..."
-                              className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400"
-                            />
+                          {sub.status !== "PENDING" && editingReviewId !== sub.id ? (
+                            /* ======================================================== */
+                            /* 1. BAJARILGAN VA BAHOLANGAN NATIJA (O'qish rejimi)       */
+                            /* ======================================================== */
+                            <div className="flex flex-col justify-between h-full space-y-4">
+                              <div className="space-y-3.5">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCheck className="w-4 h-4 text-emerald-600" />
+                                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                                      Ustoz tekshiruvi natijasi
+                                    </span>
+                                  </div>
+                                  {getStatusBadge(sub.status)}
+                                </div>
 
-                            {/* Voice Feedback Recorder */}
-                            <div className="mt-2.5">
-                              <VoiceFeedbackRecorder
-                                initialVoiceUrl={voiceNotes[sub.id] !== undefined ? voiceNotes[sub.id] : sub.comment?.voiceUrl}
-                                onVoiceRecorded={(url) => setVoiceNotes((prev) => ({ ...prev, [sub.id]: url }))}
-                                disabled={draft.saving}
-                              />
+                                {saveSuccessId === sub.id && (
+                                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                                    <CheckCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span>Baholash muvaffaqiyatli saqlandi!</span>
+                                  </div>
+                                )}
+
+                                {/* Matnli sharh */}
+                                <div className="space-y-1">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    Qoldirilgan izoh:
+                                  </div>
+                                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 font-medium leading-relaxed">
+                                    {sub.comment?.feedbackText ? (
+                                      <p className="whitespace-pre-line">{sub.comment.feedbackText}</p>
+                                    ) : (
+                                      <p className="italic text-slate-400">Matnli izoh kiritilmagan</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Ovozli sharh */}
+                                {sub.comment?.voiceUrl && (
+                                  <div className="space-y-1">
+                                    <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                                      <Volume2 className="w-3 h-3 text-indigo-600" />
+                                      <span>Ovozli tushuntirish:</span>
+                                    </div>
+                                    <div className="p-2.5 bg-white rounded-xl border border-indigo-100 shadow-2xs">
+                                      <audio controls src={sub.comment.voiceUrl} className="w-full h-8" />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Amallar tugmalari: Tahrirlash va O'chirish */}
+                              <div className="pt-3 border-t border-slate-200/70 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingReviewId(sub.id)}
+                                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Sharhni tahrirlash</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmDeleteModal({
+                                      subId: sub.id,
+                                      studentName: card.studentName,
+                                      taskTitle: card.taskTitle,
+                                    })
+                                  }
+                                  className="py-2.5 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                  title="Ushbu topshiriqni o'chirish"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>O&apos;chirish</span>
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            /* ======================================================== */
+                            /* 2. TEKSHIRISH VA SHARH YOZISH FORMASI (Kutilmoqda/Edit)  */
+                            /* ======================================================== */
+                            <>
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                    {editingReviewId === sub.id
+                                      ? "✏️ Sharh va Bahoni Tahrirlash:"
+                                      : "O'qituvchi Sharhi va Izohi:"}
+                                  </label>
+                                  {editingReviewId === sub.id && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingReviewId(null)}
+                                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                                    >
+                                      Bekor qilish
+                                    </button>
+                                  )}
+                                </div>
+                                <textarea
+                                  rows={4}
+                                  value={draft.feedbackText}
+                                  onChange={(e) =>
+                                    setReviewDrafts((prev) => ({
+                                      ...prev,
+                                      [sub.id]: { ...draft, feedbackText: e.target.value },
+                                    }))
+                                  }
+                                  placeholder="Koddagi kamchiliklar, xatolar yoki maqtovlarni yozing..."
+                                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400"
+                                />
 
-                          {/* Verdict Selector Buttons */}
-                          <div className="space-y-2">
-                            <div className="text-[11px] font-semibold text-slate-500">Baholash natijasi:</div>
-                            <div className="grid grid-cols-3 gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setReviewDrafts((prev) => ({
-                                    ...prev,
-                                    [sub.id]: { ...draft, verdict: "CORRECT" },
-                                  }))
-                                }
-                                className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
-                                  draft.verdict === "CORRECT"
-                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]"
-                                    : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                                }`}
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span>To&apos;g&apos;ri</span>
-                              </button>
+                                {/* Voice Feedback Recorder */}
+                                <div className="mt-2.5">
+                                  <VoiceFeedbackRecorder
+                                    initialVoiceUrl={
+                                      voiceNotes[sub.id] !== undefined ? voiceNotes[sub.id] : sub.comment?.voiceUrl
+                                    }
+                                    onVoiceRecorded={(url) => setVoiceNotes((prev) => ({ ...prev, [sub.id]: url }))}
+                                    disabled={draft.saving}
+                                  />
+                                </div>
+                              </div>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setReviewDrafts((prev) => ({
-                                    ...prev,
-                                    [sub.id]: { ...draft, verdict: "INCORRECT" },
-                                  }))
-                                }
-                                className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
-                                  draft.verdict === "INCORRECT"
-                                    ? "bg-rose-600 text-white border-rose-600 shadow-md scale-[1.02]"
-                                    : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
-                                }`}
-                              >
-                                <XCircle className="w-4 h-4" />
-                                <span>Xato</span>
-                              </button>
+                              {/* Verdict Selector Buttons */}
+                              <div className="space-y-2">
+                                <div className="text-[11px] font-semibold text-slate-500">Baholash natijasi:</div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setReviewDrafts((prev) => ({
+                                        ...prev,
+                                        [sub.id]: { ...draft, verdict: "CORRECT" },
+                                      }))
+                                    }
+                                    className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                                      draft.verdict === "CORRECT"
+                                        ? "bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]"
+                                        : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                    }`}
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>To&apos;g&apos;ri</span>
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setReviewDrafts((prev) => ({
-                                    ...prev,
-                                    [sub.id]: { ...draft, verdict: "RETRY" },
-                                  }))
-                                }
-                                className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
-                                  draft.verdict === "RETRY"
-                                    ? "bg-amber-600 text-white border-amber-600 shadow-md scale-[1.02]"
-                                    : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
-                                }`}
-                              >
-                                <AlertTriangle className="w-4 h-4" />
-                                <span>Qayta</span>
-                              </button>
-                            </div>
-                          </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setReviewDrafts((prev) => ({
+                                        ...prev,
+                                        [sub.id]: { ...draft, verdict: "INCORRECT" },
+                                      }))
+                                    }
+                                    className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                                      draft.verdict === "INCORRECT"
+                                        ? "bg-rose-600 text-white border-rose-600 shadow-md scale-[1.02]"
+                                        : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+                                    }`}
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                    <span>Xato</span>
+                                  </button>
 
-                          {/* Submit Review Button */}
-                          <div className="pt-2">
-                            <button
-                              type="button"
-                              disabled={draft.saving}
-                              onClick={() => handleSaveReview(sub.id)}
-                              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                            >
-                              {draft.saving ? (
-                                <>
-                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  <span>Saqlanmoqda...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Send className="w-4 h-4" />
-                                  <span>Sharhni Yuborish & Saqlash</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setReviewDrafts((prev) => ({
+                                        ...prev,
+                                        [sub.id]: { ...draft, verdict: "RETRY" },
+                                      }))
+                                    }
+                                    className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                                      draft.verdict === "RETRY"
+                                        ? "bg-amber-600 text-white border-amber-600 shadow-md scale-[1.02]"
+                                        : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+                                    }`}
+                                  >
+                                    <AlertTriangle className="w-4 h-4" />
+                                    <span>Qayta</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Submit Review & Delete Buttons */}
+                              <div className="pt-2 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmDeleteModal({
+                                      subId: sub.id,
+                                      studentName: card.studentName,
+                                      taskTitle: card.taskTitle,
+                                    })
+                                  }
+                                  className="py-3 px-3.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-rose-600 transition-all flex items-center justify-center cursor-pointer shadow-xs"
+                                  title="Ushbu topshiriqni o'chirish"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={draft.saving}
+                                  onClick={() => handleSaveReview(sub.id)}
+                                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                                >
+                                  {draft.saving ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      <span>Saqlanmoqda...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="w-4 h-4" />
+                                      <span>Sharhni Yuborish & Saqlash</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -1654,6 +1993,61 @@ export default function AdminDashboardPage() {
           setAiModelModalOpen(false);
         }}
       />
+
+      {/* Topshiriqni o'chirishni tasdiqlash modali */}
+      <AnimatePresence>
+        {confirmDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-rose-100 space-y-5"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="font-fustat font-bold text-lg text-slate-900">
+                  Topshiriqni o&apos;chirishni tasdiqlaysizmi?
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="font-bold text-slate-800">{confirmDeleteModal.studentName}</span> ning{" "}
+                  <span className="font-bold text-slate-800">«{confirmDeleteModal.taskTitle}»</span> topshirig&apos;i va unga tegishli barcha sharhlar o&apos;chiriladi. O&apos;quvchi uy ishini qaytadan topshirish imkoniyatiga ega bo&apos;ladi.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={Boolean(deletingSubId)}
+                  onClick={() => setConfirmDeleteModal(null)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(deletingSubId)}
+                  onClick={() => handleDeleteSubmission(confirmDeleteModal.subId)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {deletingSubId ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>O&apos;chirilmoqda...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Ha, o&apos;chirilsin</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

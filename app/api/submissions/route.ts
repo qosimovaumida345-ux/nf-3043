@@ -59,6 +59,7 @@ export async function GET(request: Request) {
         }
         return {
           ...s,
+          comment: s.comment?.id ? s.comment : null,
           imageUrls: parsedUrls,
         };
       });
@@ -134,6 +135,7 @@ export async function GET(request: Request) {
         }
         return {
           ...s,
+          comment: s.comment?.id ? s.comment : null,
           imageUrls: parsedUrls,
         };
       });

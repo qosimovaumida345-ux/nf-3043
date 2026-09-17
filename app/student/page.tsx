@@ -26,6 +26,7 @@ import {
   BellRing,
   Plus,
   Clipboard,
+  Trash2,
 } from "lucide-react";
 import ImageCarousel from "@/components/ImageCarousel";
 import EnhancedZoomModal from "@/components/EnhancedZoomModal";
@@ -97,6 +98,7 @@ export default function StudentDashboardPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cancelingSubId, setCancelingSubId] = useState<string | null>(null);
 
   // Zoom Modal state
   const [zoomModal, setZoomModal] = useState<{
@@ -224,6 +226,26 @@ export default function StudentDashboardPage() {
       console.error("Ma'lumotlarni yuklashda xatolik:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelSubmission = async (subId: string) => {
+    if (!window.confirm("Topshiriqni bekor qilib, boshqa rasm yuklamoqchimisiz?")) return;
+    setCancelingSubId(subId);
+    try {
+      const res = await fetch(`/api/submissions/${subId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Topshiriqni bekor qilishda xatolik yuz berdi.");
+      }
+      await fetchSessionAndHomeworks();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Topshiriqni bekor qilib bo'lmadi.";
+      alert(msg);
+    } finally {
+      setCancelingSubId(null);
     }
   };
 
@@ -829,21 +851,43 @@ export default function StudentDashboardPage() {
 
                         return (
                           <div className="p-5 sm:p-6 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-4">
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                                <Lock className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <h5 className="font-bold text-sm text-amber-900">
-                                  Topshiriq yuborilgan — O&apos;qituvchi tekshiruvida!
-                                </h5>
-                                <p className="text-xs text-amber-700 mt-0.5">
-                                  Ustoz tekshirib baho yoki izoh e&apos;lon qilmaguncha qayta rasm yubora olmaysiz.
-                                </p>
-                                <div className="text-[11px] text-amber-600/80 mt-1 font-medium">
-                                  Yuborilgan vaqt: {new Date(sub.submittedAt).toLocaleString("uz-UZ")} • {subImages.length} ta rasm topshirilgan
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                                  <Lock className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <h5 className="font-bold text-sm text-amber-900">
+                                    Topshiriq yuborilgan — O&apos;qituvchi tekshiruvida!
+                                  </h5>
+                                  <p className="text-xs text-amber-700 mt-0.5">
+                                    Ustoz tekshirib baho yoki izoh e&apos;lon qilmaguncha natijani kutasiz.
+                                  </p>
+                                  <div className="text-[11px] text-amber-600/80 mt-1 font-medium">
+                                    Yuborilgan vaqt: {new Date(sub.submittedAt).toLocaleString("uz-UZ")} • {subImages.length} ta rasm topshirilgan
+                                  </div>
                                 </div>
                               </div>
+
+                              <button
+                                type="button"
+                                disabled={cancelingSubId === sub.id}
+                                onClick={() => handleCancelSubmission(sub.id)}
+                                className="self-start sm:self-center px-3 py-2 rounded-xl bg-white hover:bg-rose-50 border border-amber-200 hover:border-rose-200 text-rose-700 font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                                title="Noto'g'ri yuklangan bo'lsa bekor qilish"
+                              >
+                                {cancelingSubId === sub.id ? (
+                                  <>
+                                    <div className="w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                                    <span>Bekor qilinmoqda...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                    <span>Bekor qilish / Qayta yuklash</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
 
                             {subImages.length > 0 && (
