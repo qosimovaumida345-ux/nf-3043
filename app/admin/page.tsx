@@ -131,6 +131,13 @@ export default function AdminDashboardPage() {
   // Muvaffaqiyatli saqlanganlik bildirishnomasi ID si
   const [saveSuccessId, setSaveSuccessId] = useState<string | null>(null);
 
+  // Tekshirilib yuklanganlardan o'chirilganlik bildirishnomasi
+  const [checkedNotification, setCheckedNotification] = useState<{
+    studentName: string;
+    taskTitle: string;
+    verdict: string;
+  } | null>(null);
+
   // O'chirish modali va yuklanish holati
   const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
     subId: string;
@@ -371,6 +378,24 @@ export default function AdminDashboardPage() {
       setEditingReviewId(null);
       setSaveSuccessId(submissionId);
       setTimeout(() => setSaveSuccessId(null), 3500);
+
+      // Topshiriq tekshirilib yuklanganlardan o'chirilganligini xabar qilish
+      const targetSub = submissions.find((s) => s.id === submissionId);
+      const studentName = targetSub?.studentName || "O'quvchi";
+      const taskTitle = targetSub?.taskTitle || targetSub?.homeworkTitle || "Topshiriq";
+      const verdictLabel =
+        verdict === "CORRECT"
+          ? "To'g'ri deb qabul qilindi"
+          : verdict === "INCORRECT"
+          ? "Xato deb belgilandi"
+          : "Qayta topshirish so'raldi";
+
+      setCheckedNotification({
+        studentName,
+        taskTitle,
+        verdict: verdictLabel,
+      });
+      setTimeout(() => setCheckedNotification(null), 4500);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Xatolik yuz berdi.";
       alert(errorMessage);
@@ -824,40 +849,13 @@ export default function AdminDashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
-        {/* KPI Stats Bar: Guruh o'quvchilari, Kutilmoqda, Bajarilgan, Yuklamaganlar */}
+        {/* KPI Stats Bar: Yuklanganlar, Tekshirilganlar, Qayta, Topshirmaganlar, Arxiv */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
-          {/* Guruhdagi jami talabalar */}
+          {/* 1. YUKLANGANLAR (Tekshirish kerak bo'lganlar - Birlamchi navbat) */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            onClick={() => {
-              setActiveTab("ALL_SUBMITTED");
-              setSelectedStatus("ALL");
-            }}
-            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
-              activeTab === "ALL_SUBMITTED" ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/40" : "border-white/90"
-            }`}
-          >
-            <div>
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                {selectedGroup === "ALL" ? "Barcha O'quvchilar" : "Guruh O'quvchilari"}
-              </div>
-              <div className="text-2xl font-fustat font-bold text-slate-900 mt-1">
-                {currentGroupStudents.length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Ro&apos;yxatga olingan</div>
-            </div>
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
-              <Users className="w-5 h-5" />
-            </div>
-          </motion.div>
-
-          {/* KUTILMOQDA (Tekshirish kerak bo'lganlar - Birlamchi) */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
             onClick={() => {
               setActiveTab("PENDING");
               setSelectedStatus("ALL");
@@ -867,24 +865,24 @@ export default function AdminDashboardPage() {
             }`}
           >
             <div>
-              <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">
-                🟡 Kutilmoqda
+              <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+                🟡 Yuklanganlar
               </div>
               <div className="text-2xl font-fustat font-bold text-amber-700 mt-1">
                 {pendingCards.length}
               </div>
-              <div className="text-[10px] text-amber-600 mt-0.5 font-medium">Tekshirish kerak</div>
+              <div className="text-[10px] text-amber-600 mt-0.5 font-semibold">Tekshirish kerak</div>
             </div>
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
               <Clock className="w-5 h-5" />
             </div>
           </motion.div>
 
-          {/* BAJARILGAN / TO'G'RI QABUL */}
+          {/* 2. TEKSHIRILGANLAR (To'g'ri / Qabul qilingan) */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
+            transition={{ delay: 0.1 }}
             onClick={() => {
               setActiveTab("CORRECT");
               setSelectedStatus("ALL");
@@ -894,69 +892,96 @@ export default function AdminDashboardPage() {
             }`}
           >
             <div>
-              <div className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">
-                🟢 Bajarilgan
+              <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                🟢 Tekshirilganlar
               </div>
               <div className="text-2xl font-fustat font-bold text-emerald-700 mt-1">
                 {correctCards.length}
               </div>
-              <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">To&apos;g&apos;ri qabul</div>
+              <div className="text-[10px] text-emerald-600 mt-0.5 font-semibold">To&apos;g&apos;ri qabul</div>
             </div>
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center font-bold">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </motion.div>
 
-          {/* JAMI YUKLAGANLAR (Topshirganlar) */}
+          {/* 3. XATO / QAYTA TOPSHIRISH */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            onClick={() => {
+              setActiveTab("RETRY_INCORRECT");
+              setSelectedStatus("ALL");
+            }}
+            className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
+              activeTab === "RETRY_INCORRECT" ? "border-rose-500 ring-2 ring-rose-500/25 bg-rose-50/60" : "border-white/90"
+            }`}
+          >
+            <div>
+              <div className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">
+                🔴 Qayta topshirish
+              </div>
+              <div className="text-2xl font-fustat font-bold text-rose-700 mt-1">
+                {retryIncorrectCards.length}
+              </div>
+              <div className="text-[10px] text-rose-600 mt-0.5 font-semibold">Xato deb topilgan</div>
+            </div>
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </motion.div>
+
+          {/* 4. TOPSHIRMAGANLAR (Hali yuklamaganlar) */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             onClick={() => {
-              setActiveTab("ALL_SUBMITTED");
-              setSelectedStatus("ALL");
+              setActiveTab("NOT_SUBMITTED");
             }}
             className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer ${
-              activeTab === "ALL_SUBMITTED" ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/50" : "border-white/90"
+              activeTab === "NOT_SUBMITTED" ? "border-slate-800 ring-2 ring-slate-800/20 bg-slate-100" : "border-white/90"
             }`}
           >
             <div>
-              <div className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">
-                📋 Yuklaganlar
+              <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                👤 Topshirmaganlar
               </div>
-              <div className="text-2xl font-fustat font-bold text-blue-700 mt-1">
-                {groupSubmittedCount}
+              <div className="text-2xl font-fustat font-bold text-slate-800 mt-1">
+                {unsubmittedStudents.length}
               </div>
-              <div className="text-[10px] text-blue-600 mt-0.5 font-medium">Jami topshirgan</div>
+              <div className="text-[10px] text-slate-500 mt-0.5 font-medium">Hali kod yuklamagan</div>
             </div>
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-500/15 text-blue-600 flex items-center justify-center font-bold">
-              <UserCheck className="w-5 h-5" />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-slate-200 text-slate-700 flex items-center justify-center font-bold">
+              <UserX className="w-5 h-5" />
             </div>
           </motion.div>
 
-          {/* YUKLAMAGANLAR (Topshirmaganlar) */}
+          {/* 5. BARCHA TOPSHIRIQLAR ARXIVI */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
             onClick={() => {
-              setActiveTab("NOT_SUBMITTED");
+              setActiveTab("ALL_SUBMITTED");
+              setSelectedStatus("ALL");
             }}
             className={`p-4 sm:p-5 rounded-2xl bg-white/85 backdrop-blur-xl border shadow-xs flex items-center justify-between hover:scale-[1.02] transition-transform cursor-pointer col-span-2 sm:col-span-1 ${
-              activeTab === "NOT_SUBMITTED" ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/50" : "border-white/90"
+              activeTab === "ALL_SUBMITTED" ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/50" : "border-white/90"
             }`}
           >
             <div>
-              <div className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider">
-                🔴 Yuklamaganlar
+              <div className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider">
+                📋 Barcha Arxiv
               </div>
-              <div className="text-2xl font-fustat font-bold text-rose-700 mt-1">
-                {groupUnsubmittedCount}
+              <div className="text-2xl font-fustat font-bold text-blue-700 mt-1">
+                {baseCards.length}
               </div>
-              <div className="text-[10px] text-rose-600 mt-0.5 font-medium">Hali topshirmadi</div>
+              <div className="text-[10px] text-blue-600 mt-0.5 font-medium">Jami topshiriqlar</div>
             </div>
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold">
-              <UserX className="w-5 h-5" />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-500/15 text-blue-600 flex items-center justify-center font-bold">
+              <Layers className="w-5 h-5" />
             </div>
           </motion.div>
         </div>
@@ -1047,11 +1072,11 @@ export default function AdminDashboardPage() {
                 }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all cursor-pointer"
               >
-                <option value="PENDING">🟡 Tekshirish kerak — Kutilmoqda ({pendingCards.length} ta)</option>
-                <option value="CORRECT">🟢 Bajarilgan — To&apos;g&apos;ri deb qabul qilingan ({correctCards.length} ta)</option>
-                <option value="RETRY_INCORRECT">🟠 Xato yoki qayta topshirish ({retryIncorrectCards.length} ta)</option>
-                <option value="ALL_SUBMITTED">📋 Barcha topshirganlar ({baseCards.length} ta)</option>
-                <option value="NOT_SUBMITTED">🔴 Hali topshirmaganlar ({unsubmittedStudents.length} ta)</option>
+                <option value="PENDING">🟡 Yuklanganlar (Tekshirish kerak) ({pendingCards.length} ta)</option>
+                <option value="CORRECT">🟢 Tekshirilganlar (Bajarilgan) ({correctCards.length} ta)</option>
+                <option value="RETRY_INCORRECT">🔴 Qayta topshirish / Xato ({retryIncorrectCards.length} ta)</option>
+                <option value="NOT_SUBMITTED">👤 Topshirmaganlar ({unsubmittedStudents.length} ta)</option>
+                <option value="ALL_SUBMITTED">📋 Barcha Arxiv (Tarix) ({baseCards.length} ta)</option>
               </select>
             </div>
 
@@ -1129,7 +1154,7 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Tekshirish kerak (Kutilmoqda)</span>
+            <span>🟡 Yuklanganlar (Tekshirish kerak)</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                 activeTab === "PENDING" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-800"
@@ -1152,7 +1177,7 @@ export default function AdminDashboardPage() {
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Bajarilgan / Qabul Qilingan</span>
+            <span>🟢 Tekshirilganlar (Bajarilgan)</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                 activeTab === "CORRECT" ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-800"
@@ -1175,13 +1200,35 @@ export default function AdminDashboardPage() {
             }`}
           >
             <AlertTriangle className="w-4 h-4" />
-            <span>Xato / Qayta topshirish</span>
+            <span>🔴 Qayta / Xato</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                 activeTab === "RETRY_INCORRECT" ? "bg-white/25 text-white" : "bg-rose-100 text-rose-800"
               }`}
             >
               {retryIncorrectCards.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("NOT_SUBMITTED");
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "NOT_SUBMITTED"
+                ? "bg-slate-800 text-white shadow-md shadow-slate-800/25 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <UserX className="w-4 h-4" />
+            <span>👤 Topshirmaganlar</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === "NOT_SUBMITTED" ? "bg-white/25 text-white" : "bg-slate-300 text-slate-800"
+              }`}
+            >
+              {unsubmittedStudents.length}
             </span>
           </button>
 
@@ -1198,35 +1245,13 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Barcha topshirganlar</span>
+            <span>📋 Barcha Arxiv</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                 activeTab === "ALL_SUBMITTED" ? "bg-white/25 text-white" : "bg-blue-100 text-blue-800"
               }`}
             >
               {baseCards.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("NOT_SUBMITTED");
-            }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "NOT_SUBMITTED"
-                ? "bg-slate-800 text-white shadow-md shadow-slate-800/25 scale-[1.02]"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-            }`}
-          >
-            <UserX className="w-4 h-4" />
-            <span>Topshirmaganlar</span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                activeTab === "NOT_SUBMITTED" ? "bg-white/25 text-white" : "bg-slate-300 text-slate-800"
-              }`}
-            >
-              {unsubmittedStudents.length}
             </span>
           </button>
         </div>
@@ -1360,18 +1385,117 @@ export default function AdminDashboardPage() {
         {/* ========================================================= */}
         {activeTab !== "NOT_SUBMITTED" && (
           <div className="space-y-6 pt-2">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
-                  <UserCheck className="w-4 h-4" />
-                </div>
-                <h3 className="font-fustat font-bold text-base text-slate-900">
-                  🟢 Kod Yuklagan O&apos;quvchilar Topshiriqlari:
-                </h3>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                  {filteredSubmittedCards.length} ta topshiriq
-                </span>
+            {/* Tekshirilib yuklanganlardan o'tganlik haqidagi bildirishnoma */}
+            <AnimatePresence>
+              {checkedNotification && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                  className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-blue-500/15 border border-emerald-500/30 flex items-center justify-between gap-3 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">
+                        {checkedNotification.studentName} ({checkedNotification.taskTitle}) muvaffaqiyatli tekshirildi!
+                      </div>
+                      <div className="text-[11px] text-emerald-800 font-medium mt-0.5">
+                        Natija: <span className="font-bold">{checkedNotification.verdict}</span>. Ushbu topshiriq &quot;Yuklanganlar&quot; ro&apos;yxatidan chiqarildi va &quot;Tekshirilganlar&quot; bo&apos;limiga o&apos;tkazildi.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCheckedNotification(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Dinamik sarlavha va topshiriqlar soni */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+              <div className="flex items-center gap-2.5">
+                {activeTab === "PENDING" && (
+                  <>
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-fustat font-bold text-base text-slate-900">
+                        🟡 Yuklanganlar — Tekshirish Kerak Bo&apos;lgan Topshiriqlar:
+                      </h3>
+                      <p className="text-[11px] text-amber-700 font-medium">
+                        Tekshirib saqlaganingizdan so&apos;ng avtomatik tarzda bu ro&apos;yxatdan o&apos;chib, &quot;Tekshirilganlar&quot; bo&apos;limiga o&apos;tadi.
+                      </p>
+                    </div>
+                  </>
+                )}
+                {activeTab === "CORRECT" && (
+                  <>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-fustat font-bold text-base text-slate-900">
+                        🟢 Tekshirilganlar — Bajarilgan va Qabul Qilingan Topshiriqlar:
+                      </h3>
+                      <p className="text-[11px] text-emerald-700 font-medium">
+                        O&apos;qituvchi tomonidan to&apos;g&apos;ri deb tasdiqlangan topshiriqlar.
+                      </p>
+                    </div>
+                  </>
+                )}
+                {activeTab === "RETRY_INCORRECT" && (
+                  <>
+                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-fustat font-bold text-base text-slate-900">
+                        🔴 Qayta Topshirish So&apos;ralgan va Xato Topshiriqlar:
+                      </h3>
+                      <p className="text-[11px] text-rose-700 font-medium">
+                        Qayta topshirish yoki xatolarini tuzatish so&apos;ralgan o&apos;quvchilar ishlari.
+                      </p>
+                    </div>
+                  </>
+                )}
+                {activeTab === "ALL_SUBMITTED" && (
+                  <>
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-fustat font-bold text-base text-slate-900">
+                        📋 Barcha Topshiriqlar Tarixi (Arxiv):
+                      </h3>
+                      <p className="text-[11px] text-blue-700 font-medium">
+                        Tekshirilgan va kutilayotgan barcha uy ishlari arxivi.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
+
+              <span
+                className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                  activeTab === "PENDING"
+                    ? "text-amber-800 bg-amber-50 border-amber-200"
+                    : activeTab === "CORRECT"
+                    ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                    : activeTab === "RETRY_INCORRECT"
+                    ? "text-rose-800 bg-rose-50 border-rose-200"
+                    : "text-blue-800 bg-blue-50 border-blue-200"
+                }`}
+              >
+                {filteredSubmittedCards.length} ta topshiriq
+              </span>
             </div>
 
             {loading ? (
@@ -1383,26 +1507,31 @@ export default function AdminDashboardPage() {
                 <Radio className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h4 className="text-sm font-semibold text-slate-700">Topshiriqlar topilmadi</h4>
                 <p className="text-xs text-slate-400 mt-1">
-                  Ushbu filtr bo&apos;yicha hali o&apos;quvchilar kod yuklamagan.
+                  {activeTab === "PENDING"
+                    ? "Ajoyib! Hozirda tekshirilishi kutilayotgan yangi uy ishlari yo'q. Barcha ishlar tekshirib bo'lingan!"
+                    : "Ushbu filtr bo'yicha hali o'quvchilar kod yuklamagan."}
                 </p>
               </div>
             ) : (
               <div className="space-y-6">
-                {filteredSubmittedCards.map((card, idx) => {
-                  const sub = card.latest;
-                  const draft = reviewDrafts[sub.id] || {
-                    feedbackText: sub.comment?.feedbackText || "",
-                    verdict: (sub.comment?.verdict as "CORRECT" | "INCORRECT" | "RETRY") || "CORRECT",
-                  };
+                <AnimatePresence mode="popLayout">
+                  {filteredSubmittedCards.map((card, idx) => {
+                    const sub = card.latest;
+                    const draft = reviewDrafts[sub.id] || {
+                      feedbackText: sub.comment?.feedbackText || "",
+                      verdict: (sub.comment?.verdict as "CORRECT" | "INCORRECT" | "RETRY") || "CORRECT",
+                    };
 
-                  return (
-                    <motion.div
-                      key={card.groupKey}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.04 * idx, duration: 0.35 }}
-                      className="rounded-3xl p-6 sm:p-7 bg-white/95 backdrop-blur-xl border border-white/90 shadow-sm hover:shadow-xl hover:border-blue-300/60 transition-all space-y-6"
-                    >
+                    return (
+                      <motion.div
+                        key={card.groupKey}
+                        layout
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.94, y: -20, transition: { duration: 0.25 } }}
+                        transition={{ duration: 0.3 }}
+                        className="rounded-3xl p-6 sm:p-7 bg-white/95 backdrop-blur-xl border border-white/90 shadow-sm hover:shadow-xl hover:border-blue-300/60 transition-all space-y-6"
+                      >
                       {/* Top Bar: Talaba ma'lumotlari, guruh, urinishlar soni, vaqt, status */}
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                         <div className="flex items-center gap-3">
@@ -1931,6 +2060,7 @@ export default function AdminDashboardPage() {
                     </motion.div>
                   );
                 })}
+                </AnimatePresence>
               </div>
             )}
           </div>
