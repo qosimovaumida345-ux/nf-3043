@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb, ensureDatabaseReady } from "@/lib/db";
 import { submissions, reviewComments } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function POST(
   request: Request,
@@ -86,6 +86,34 @@ export async function POST(
       .update(submissions)
       .set({ status: verdict })
       .where(eq(submissions.id, submissionId));
+
+    // Agar to'g'ri deb qabul qilinsa, ushbu talabaning ayni shu vazifasi bo'yicha boshqa barcha kutilayotgan (PENDING) urinishlari ham CORRECT qilinadi
+    if (verdict === "CORRECT" && existing[0]) {
+      const target = existing[0];
+      if (target.homeworkId) {
+        await db
+          .update(submissions)
+          .set({ status: "CORRECT" })
+          .where(
+            and(
+              eq(submissions.studentId, target.studentId),
+              eq(submissions.homeworkId, target.homeworkId),
+              eq(submissions.status, "PENDING")
+            )
+          );
+      } else if (target.taskTitle) {
+        await db
+          .update(submissions)
+          .set({ status: "CORRECT" })
+          .where(
+            and(
+              eq(submissions.studentId, target.studentId),
+              eq(submissions.taskTitle, target.taskTitle),
+              eq(submissions.status, "PENDING")
+            )
+          );
+      }
+    }
 
     return NextResponse.json({
       success: true,

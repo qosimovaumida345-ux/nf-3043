@@ -356,22 +356,53 @@ export default function AdminDashboardPage() {
         throw new Error("Sharhni saqlab bo'lmadi.");
       }
 
+      const targetSub = submissions.find((s) => s.id === submissionId);
+      const targetStudentId = targetSub?.studentId;
+      const targetTaskNorm = (targetSub?.homeworkTitle || targetSub?.taskTitle || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+
       setSubmissions((prev) =>
-        prev.map((s) =>
-          s.id === submissionId
-            ? {
+        prev.map((s) => {
+          if (s.id === submissionId) {
+            return {
+              ...s,
+              status: verdict,
+              comment: {
+                id: s.comment?.id || "temp",
+                feedbackText,
+                voiceUrl: voiceUrl !== undefined ? voiceUrl : s.comment?.voiceUrl,
+                verdict,
+                createdAt: new Date().toISOString(),
+              },
+            };
+          }
+          if (
+            verdict === "CORRECT" &&
+            targetStudentId &&
+            s.studentId === targetStudentId
+          ) {
+            const sNorm = (s.homeworkTitle || s.taskTitle || "")
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "");
+            if (sNorm && targetTaskNorm && sNorm === targetTaskNorm) {
+              return {
                 ...s,
-                status: verdict,
-                comment: {
-                  id: s.comment?.id || "temp",
+                status: "CORRECT",
+                comment: s.comment || {
+                  id: "temp-cascade",
                   feedbackText,
-                  voiceUrl: voiceUrl !== undefined ? voiceUrl : s.comment?.voiceUrl,
-                  verdict,
+                  voiceUrl: voiceUrl !== undefined ? voiceUrl : undefined,
+                  verdict: "CORRECT",
                   createdAt: new Date().toISOString(),
                 },
-              }
-            : s
-        )
+              };
+            }
+          }
+          return s;
+        })
       );
 
       // Tahrirlash rejimini yopish va muvaffaqiyat belgisini yoqish
@@ -380,7 +411,6 @@ export default function AdminDashboardPage() {
       setTimeout(() => setSaveSuccessId(null), 3500);
 
       // Topshiriq tekshirilib yuklanganlardan o'chirilganligini xabar qilish
-      const targetSub = submissions.find((s) => s.id === submissionId);
       const studentName = targetSub?.studentName || "O'quvchi";
       const taskTitle = targetSub?.taskTitle || targetSub?.homeworkTitle || "Topshiriq";
       const verdictLabel =
@@ -579,12 +609,15 @@ export default function AdminDashboardPage() {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  // 1. Talaba va uy ishi bo'yicha guruhlangan cardlar
+  // 1. Talaba va uy ishi bo'yicha to'g'ri guruhlangan cardlar
+  // Agar o'quvchi ayni bir vazifaga bir necha bor topshirgan bo'lsa yoki
+  // o'qituvchi tomonidan bir xil nomli uy ishi bir necha bor ochilgan bo'lsa ham ("uy ishisiz" yoki id bilan),
+  // ular bitta vazifa sifatida birlashtiriladi!
   const groupedMap = new Map<string, Submission[]>();
   submissions.forEach((s) => {
-    const key = s.homeworkId
-      ? `${s.studentId}_${s.homeworkId}`
-      : `${s.studentId}_${(s.taskTitle || "vazifa").trim().toLowerCase()}`;
+    const rawTask = (s.homeworkTitle || s.taskTitle || "vazifa").trim();
+    const normTask = rawTask.toLowerCase().replace(/[^a-z0-9]/g, "") || "vazifa";
+    const key = `${s.studentId}_${normTask}`;
     const list = groupedMap.get(key) || [];
     list.push(s);
     groupedMap.set(key, list);
@@ -594,36 +627,68 @@ export default function AdminDashboardPage() {
     const sorted = [...subs].sort(
       (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
     );
+
+    // Agar ushbu vazifaning biror urinishi allaqachon To'g'ri (CORRECT) deb baholangan bo'lsa:
+    // Bu talaba ushbu topshiriqni muvaffaqiyatli topshirgan hisoblanadi!
+    const correctAttempt = sorted.find((s) => s.status === "CORRECT");
     const latest = sorted[0];
-    const previousAttempts = sorted.slice(1);
+
+    // Asosiy ko'rinadigan urinish: Agar allaqachon to'g'ri deb qabul qilingan bo'lsa,
+    // o'sha qabul qilingan urinish asosiy bo'ladi. Aks holda eng oxirgi urinish olinadi.
+    const activeSub = correctAttempt || latest;
+
+    // Samarali status (Effective Status):
+    // Agar to'g'ri deb baholangan bo'lsa -> CORRECT (Kutilayotgan/Yuklanganlar navbatidan so'zsiz chiqadi!)
+    // Aks holda eng oxirgi urinish statusi (PENDING, INCORRECT yoki RETRY)
+    const effectiveStatus: "PENDING" | "CORRECT" | "INCORRECT" | "RETRY" = correctAttempt
+      ? "CORRECT"
+      : (latest.status as any);
 
     let latestImages: string[] = [];
-    if (Array.isArray(latest.imageUrls) && latest.imageUrls.length > 0) {
-      latestImages = latest.imageUrls;
-    } else if (typeof latest.imageUrls === "string" && latest.imageUrls.trim()) {
+    if (Array.isArray(activeSub.imageUrls) && activeSub.imageUrls.length > 0) {
+      latestImages = activeSub.imageUrls;
+    } else if (typeof activeSub.imageUrls === "string" && activeSub.imageUrls.trim()) {
       try {
-        const parsed = JSON.parse(latest.imageUrls);
+        const parsed = JSON.parse(activeSub.imageUrls);
         if (Array.isArray(parsed)) latestImages = parsed;
       } catch {
         latestImages = [];
       }
     }
-    if (latestImages.length === 0 && latest.imageUrl) {
-      latestImages = [latest.imageUrl];
+    if (latestImages.length === 0 && activeSub.imageUrl) {
+      latestImages = [activeSub.imageUrl];
     }
+
+    const homeworkIds = new Set<string>();
+    const taskTitles = new Set<string>();
+    subs.forEach((s) => {
+      if (s.homeworkId) homeworkIds.add(s.homeworkId);
+      if (s.homeworkTitle) taskTitles.add(s.homeworkTitle.trim().toLowerCase());
+      if (s.taskTitle) taskTitles.add(s.taskTitle.trim().toLowerCase());
+    });
+
+    const normTaskName = (activeSub.homeworkTitle || activeSub.taskTitle || "vazifa")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
 
     return {
       groupKey,
-      submissionId: latest.id,
-      homeworkId: latest.homeworkId,
-      studentId: latest.studentId,
-      studentName: latest.studentName,
-      studentUsername: latest.studentUsername,
-      studentGroupId: latest.studentGroupId,
-      studentGroupName: latest.studentGroupName,
-      taskTitle: latest.taskTitle || latest.homeworkTitle || "Uy ishi topshirig'i",
-      latest,
-      previousAttempts,
+      submissionId: activeSub.id,
+      homeworkId: activeSub.homeworkId,
+      homeworkIds,
+      taskTitles,
+      normalizedTaskName: normTaskName,
+      studentId: activeSub.studentId,
+      studentName: activeSub.studentName,
+      studentUsername: activeSub.studentUsername,
+      studentGroupId: activeSub.studentGroupId,
+      studentGroupName: activeSub.studentGroupName,
+      taskTitle: activeSub.taskTitle || activeSub.homeworkTitle || "Uy ishi topshirig'i",
+      effectiveStatus,
+      latest: activeSub,
+      rawLatest: latest,
+      previousAttempts: sorted.filter((s) => s.id !== activeSub.id),
       totalAttempts: sorted.length,
       images: latestImages,
     };
@@ -644,7 +709,14 @@ export default function AdminDashboardPage() {
   // Topshirgan o'quvchilar ID lari
   const submittedStudentIds = new Set<string>();
   submissions.forEach((s) => {
-    if (selectedHomework !== "ALL" && s.homeworkId !== selectedHomework) return;
+    if (selectedHomework !== "ALL") {
+      const selectedHw = homeworks.find((h) => h.id === selectedHomework);
+      const targetNorm = selectedHw?.title?.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const sNorm = (s.homeworkTitle || s.taskTitle || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (s.homeworkId !== selectedHomework && (!targetNorm || sNorm !== targetNorm)) {
+        return;
+      }
+    }
     submittedStudentIds.add(s.studentId);
   });
 
@@ -657,9 +729,15 @@ export default function AdminDashboardPage() {
       if (studentGroupId !== selectedGroup) return false;
     }
 
-    // Uy ishi filtri
-    if (selectedHomework !== "ALL" && card.homeworkId !== selectedHomework) {
-      return false;
+    // Uy ishi filtri:
+    if (selectedHomework !== "ALL") {
+      const selectedHw = homeworks.find((h) => h.id === selectedHomework);
+      const targetNorm = selectedHw?.title?.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const matchesId = card.homeworkIds.has(selectedHomework);
+      const matchesTitle = targetNorm ? card.normalizedTaskName === targetNorm : false;
+      if (!matchesId && !matchesTitle) {
+        return false;
+      }
     }
 
     // Talaba filtri
@@ -679,11 +757,11 @@ export default function AdminDashboardPage() {
     return true;
   });
 
-  // Holatlar bo'yicha hisoblangan toifalar
-  const pendingCards = baseCards.filter((c) => c.latest.status === "PENDING");
-  const correctCards = baseCards.filter((c) => c.latest.status === "CORRECT");
+  // Holatlar bo'yicha hisoblangan toifalar (effectiveStatus orqali! Baholanganlar kutilayotganlarda aslo chiqmaydi):
+  const pendingCards = baseCards.filter((c) => c.effectiveStatus === "PENDING");
+  const correctCards = baseCards.filter((c) => c.effectiveStatus === "CORRECT");
   const retryIncorrectCards = baseCards.filter(
-    (c) => c.latest.status === "INCORRECT" || c.latest.status === "RETRY"
+    (c) => c.effectiveStatus === "INCORRECT" || c.effectiveStatus === "RETRY"
   );
 
   // 3. Topshirmagan o'quvchilar (YUKLAMAGANLAR)
@@ -712,7 +790,7 @@ export default function AdminDashboardPage() {
     filteredSubmittedCards = retryIncorrectCards;
   } else if (activeTab === "ALL_SUBMITTED") {
     if (selectedStatus !== "ALL") {
-      filteredSubmittedCards = baseCards.filter((c) => c.latest.status === selectedStatus);
+      filteredSubmittedCards = baseCards.filter((c) => c.effectiveStatus === selectedStatus);
     } else {
       filteredSubmittedCards = baseCards;
     }
